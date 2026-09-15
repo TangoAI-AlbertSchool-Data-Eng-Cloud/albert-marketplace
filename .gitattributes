@@ -1,0 +1,4 @@
+# Generated and locked files keep Unix line endings in every checkout, so a
+# checksum taken on Windows matches the one written in a container.
+uv.lock                 text eol=lf
+generators/**/*.json    text eol=lf

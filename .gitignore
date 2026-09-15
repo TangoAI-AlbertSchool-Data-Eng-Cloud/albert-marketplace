@@ -1,0 +1,21 @@
+# Generated data and release assets never go in git
+data/
+*.parquet
+*.dump
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Personal Claude Code settings (machine-specific paths)
+.claude/settings.local.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS
+.DS_Store

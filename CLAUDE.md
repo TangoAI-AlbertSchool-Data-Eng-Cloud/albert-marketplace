@@ -25,7 +25,8 @@ adapted, in the order of `docs/build-spec.md` §6:
 - `db/`: from `JedhaBootcamp/amazon-database-design`. The notebook that built
   the original data, the diagrams, `db/migrations/` (dbmate, plain SQL: a
   baseline with the legacy schema, trigger and fixed procedure, then
-  `order_items`), and `db/load_legacy.sql`, which loads the legacy CSV extract
+  `order_items`, then wider phone columns), and `db/load_legacy.sql`, which
+  loads the legacy CSV extract
   with its defects.
 - `storefront/`: from `JedhaBootcamp/amazon-mockup-e-commerce`. FastAPI +
   Streamlit. Not yet reconciled with the migrations; its own
@@ -74,8 +75,8 @@ notes are not.
   as a GitHub release asset.
 - **The schema is the contract.** A table change updates the migration, the
   storefront models and both generators in the same commit.
-- **Generators are deterministic.** A fixed seed gives identical output on every
-  run, checked by a checksum. The course teaches idempotency and pins a dataset
+- **Generators are deterministic.** A fixed seed and end date give identical
+  output on every run, checked by a checksum. The course teaches idempotency and pins a dataset
   version.
 - **Licences:**
   - code is MIT

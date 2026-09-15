@@ -54,10 +54,10 @@ in §10.3 and step 3.
 
 | Table | Rows | Notes |
 |---|---|---|
-| `customer` | 130,766 | 100,000 buyers + 30,766 sellers. `pwd` is a random plaintext string of 12 characters (one has 20). Phones are 10-character strings starting with 0, in `CHAR(10)`; pandas reads them as integers, so they show as 9 digits (one as `0`), and the same happens to the phones in `shipping_details`. 4 first names are the strings `None`, `NA`, `N/A`, `NULL`, which pandas reads as null (§10.3). Fake email domains |
+| `customer` | 130,766 | 100,000 buyers + 30,766 sellers. `pwd` is a random plaintext string of 12 characters (one has 20). Phones are 10-character strings starting with 0, in `CHAR(10)` (`VARCHAR(15)` since §9.10); pandas reads them as integers, so they show as 9 digits (one as `0`), and the same happens to the phones in `shipping_details`. 4 first names are the strings `None`, `NA`, `N/A`, `NULL`, which pandas reads as null (§10.3). Fake email domains |
 | `buyer` / `seller` | 100,000 / 30,766 | `seller` has no `SELLER_NAME` column, although the schema declares one |
-| `shipping_details` / `customer_shipping` | 200,001 each | US addresses from Faker |
-| `payment_details` / `customer_payment` | 100,000 each | Card number, **CVV**, expiry 2026-2030, billing address. One payment per buyer |
+| `shipping_details` / `customer_shipping` | 200,001 each | US addresses from Faker. Each buyer has 1, 2 or 3 addresses (33,219 / 33,561 / 33,220 buyers) |
+| `payment_details` / `customer_payment` | 100,000 each | Card number, **CVV**, expiry 2026-2030, billing address. One payment per buyer. Every billing address is the buyer's default shipping address with street, city, state and ZIP glued together without separators (`548 Mendoza ForgeWest CynthiaArizona62999`) |
 | `subscription` | 50,091 | 2024-07 → 2026-07 |
 | `orders` | 222,644 | `order_date` 2000-10-28 → 2023-08-30, dense 2015-2021 (2020: 40,287; 2021: 39,545; 2022: 19,457). `discount_id` all null. **No product, no quantity.** Every buyer has 2 or more orders; 24,375 duplicate (buyer, payment, date) rows; day-of-week flat (14.0-14.7% each); no seasonality |
 | `product` | 42,858 | ASIN ids, name (6 empty), JSON `p_desc`, price 0.00043 → 2,143.46 (missing prices were filled from a normal distribution, which left 35,205 prices with float noise), `qty` random 1-100. Categories: All Beauty 42,637, Premium Beauty 221 |
@@ -136,10 +136,17 @@ CREATE TABLE ORDER_ITEMS (
 ### 5.2 Europe (decided)
 
 - Regenerate `shipping_details` and phone numbers with EU Faker locales.
-  - Phones stay text in each country's national format, keeping the leading 0
-    where the country uses one (§9.7). Spanish numbers have none.
-  - German numbers run to 11 or 12 digits and do not fit `CHAR(10)`: settle
-    that in step 5.
+  - Phones stay text in each country's national format, digits only, keeping
+    the leading 0 where the country uses one (§9.7). Spanish numbers have none.
+  - The phone columns are `VARCHAR(15)`, because German mobiles have 11 or 12
+    digits (§9.10).
+  - Faker's `phone_number()` cannot be used as it is (measured on 5,000 numbers
+    per locale, Faker 40.18.0): it mixes international and national formats
+    with spaces and brackets, and `fr_BE` returns US numbers. Generate the
+    numbers from each country's mobile prefixes, with the seeded generator.
+- Rebuild `PAYMENT_DETAILS.BILLING_ADDRESS` from each buyer's new default
+  address, glued without separators as in the extract, where all 100,000
+  billing addresses are exactly that (§9.13).
 - `STATE` holds a region.
 - Prices are read as EUR.
 - Names, emails and IDs stay.
@@ -148,8 +155,8 @@ CREATE TABLE ORDER_ITEMS (
 
 ### 5.3 Dates (decided)
 
-- Keep **three full years** of history, ending at a configurable `--end-date`
-  (course start).
+- Keep **three full years** of history, ending at `--end-date`, which defaults
+  to the day the generator runs (§9.11).
 - The load generator continues from there.
 
 ### 5.4 History generator (decided; calibration measured 2026-09-15)
@@ -157,9 +164,19 @@ CREATE TABLE ORDER_ITEMS (
 1. **Purchases come from the review graph.** Each review (`review` →
    `product_reviews`) is one purchase by its buyer. The order's first line is
    the reviewed product.
+   - *Measured on the extract:* order ids run 1-222,644 and review ids
+     96,001-207,322, both without gaps. Order *i* and order 111,322 + *i* both
+     belong to review 96,000 + *i*: the buyers match in all 111,322 pairs.
+   - Every review has exactly one product and one seller, and every order is
+     paid with its buyer's own card (`CUSTOMER_PAYMENT`).
 2. **Keep the duplicate twin of every order,** with the same lines as its
    original. Demand is then double-counted until the students' silver layer
    deduplicates it.
+   - *Measured:* a twin's date is 0-4 days from its original's: 0 days for
+     22,146 pairs, 1 day for 35,602, 2 for 26,792, 3 for 17,841, 4 for 8,941.
+   - §3's 24,375 repeated (buyer, payment, date) rows include those 22,146
+     same-day twins. The other 2,229 are different reviews by one buyer that
+     fell on the same date, since each buyer has a single card.
 3. **Redraw the order date.**
    - The **week** is drawn with probability proportional to Online Retail II's
      week-of-year index (§5.4.1) times a trend parameter (default: flat,
@@ -168,7 +185,7 @@ CREATE TABLE ORDER_ITEMS (
    - The **day within the week is uniform:** there is no consumer day-of-week
      profile we can source.
    - The **duplicate twin keeps** the original's date or a date up to 4 days
-     away, reproducing today's pattern.
+     later, never earlier, reproducing today's pattern (§9.15).
 4. **Extra lines per order:** the count comes from the consumer-like order
    distribution (§5.4.2). Products are drawn from the catalogue weighted by
    review count, never repeating within an order (the primary key forbids it).
@@ -179,8 +196,8 @@ CREATE TABLE ORDER_ITEMS (
 7. **Shipments:** one `SHIPMENT` row per order line, as the storefront writes
    them.
    - estimated delivery = order + 7 days (the storefront's rule)
-   - status and actual delivery date derived from how old the order is, with
-     the distribution documented as an assumption
+   - status and actual delivery date derived from how old the order is at
+     `--end-date` (§9.14), documented as an assumption
    - `CARRIER` holds a handful of **fictional** carriers
 8. **Determinism:** one seed; a checksum of the output is written with the
    release.
@@ -284,6 +301,7 @@ It is a business-to-business working week.
   - attribution (Amazon Reviews'23; Online Retail II for calibration)
   - every deliberate defect
   - every generator assumption
+  - the seed and end date the dataset was generated with
 - **Size:** GitHub allows each release asset up to 2 GiB. Check the dump against
   that before choosing compression.
 
@@ -450,6 +468,31 @@ It is a business-to-business working week.
 9. **Units per product keep their pack-size spikes** (6, 12, 4, 8 and 10
    units; decided after step 4). The measured distribution is used as it is and
    listed in the dataset card as a generator assumption.
+10. **`CUSTOMER.PHONE` and `SHIPPING_DETAILS.PHONE` widen from `CHAR(10)` to
+    `VARCHAR(15)`** (decided before step 5), in their own migration, with the
+    storefront model. German mobiles have 11 or 12 digits in national format,
+    and 15 is the most digits any international number has.
+    *Verified:* the migration applies on a cold start; after the legacy load
+    every phone matches its CSV value; a 12-digit German mobile is accepted and
+    16 digits are refused; a rollback refuses while a longer phone exists (dbmate
+    prints "Rolled back" after the error, but the migration stays applied) and
+    works once it is gone; the storefront's checkout still runs.
+11. **`--end-date` defaults to the day the generator runs** (decided before step
+    5); the history covers the three years before it. Output is identical for
+    the same seed *and* end date, and the dataset card records both.
+12. **The `PAYMENT` table (§9.1) is migrated in step 5,** because the history
+    backfills it. The storefront's `Payment` model and checkout switch to it in
+    the same commit.
+13. **Billing addresses are rebuilt** from each buyer's new default address,
+    glued without separators as in the extract.
+14. **Shipment status comes from the order's age at `--end-date`,** listed in
+    the dataset card as an assumption:
+    - over 10 days: `delivered`, actual delivery 2-9 days after the order
+    - 3 to 10 days: `in_transit`, no actual delivery date
+    - under 3 days: `processing`, no actual delivery date
+    - four fictional carriers; `RETURNS` stays empty
+15. **A twin's date is on or after its original's,** 0-4 days later with the
+    measured shares (§5.4 item 2). The extract shows gap sizes, not direction.
 
 ---
 

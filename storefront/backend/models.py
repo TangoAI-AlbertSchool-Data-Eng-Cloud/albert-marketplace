@@ -11,7 +11,7 @@ class Customer(Base):
     c_id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
     fname = Column(String, nullable=False)
     lname = Column(String, nullable=False)
-    phone = Column(String(10), unique=True, nullable=False)
+    phone = Column(String(15), unique=True, nullable=False)
     email = Column(String, unique=True, nullable=False)
     pwd = Column(String, nullable=False)
     order = relationship("Orders", back_populates="customer")

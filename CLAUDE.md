@@ -30,8 +30,11 @@ adapted, in the order of `docs/build-spec.md` §6:
 - `storefront/`: from `JedhaBootcamp/amazon-mockup-e-commerce`. FastAPI +
   Streamlit. Not yet reconciled with the migrations; its own
   `docker-compose.yaml` still runs PostgreSQL 13.
+- `generators/`: a uv project (Python 3.12, pinned in `uv.lock`), run in
+  containers. `history/calibrate.py` writes `history/calibration.json` from
+  Online Retail II.
 - `compose.yaml` at the root: PostgreSQL 17, the `migrate` service, and
-  `load-legacy` behind the `build` profile.
+  `load-legacy` and `calibrate` behind the `build` profile.
 - `docs/critique/`: originals the course critiques, kept unchanged.
 
 **Read `docs/build-spec.md` before changing anything.** It is the plan, and it

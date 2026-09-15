@@ -1,0 +1,736 @@
+{
+  "description": "Calibration for the Albert's Marketplace order-history generator, measured on Online Retail II (docs/build-spec.md §5.4)",
+  "source": {
+    "dataset": "Online Retail II",
+    "citation": "Chen, D. (2012). Online Retail II [Dataset]. UCI Machine Learning Repository. https://doi.org/10.24432/C5CG6D",
+    "licence": "CC BY 4.0",
+    "use": "calibration only: no row of the dataset is redistributed",
+    "file": "online_retail_II.xlsx",
+    "sha256": "bcbe73b35f5b7babf197fb0cb983a11f5d9ff929078d4aa53d171b1f2df2e980"
+  },
+  "sales": {
+    "sheets": [
+      "Year 2009-2010",
+      "Year 2010-2011"
+    ],
+    "rows": 1067371,
+    "rows_without_exact_duplicates": 1033036,
+    "rules": [
+      "both sheets concatenated, exact duplicate rows dropped",
+      "Invoice not prefixed C (cancellations)",
+      "Quantity > 0",
+      "Price > 0",
+      "StockCode starts with 5 digits (products, not postage or fees)"
+    ],
+    "sale_lines": 1003214,
+    "invoices": 39516
+  },
+  "week_of_year": {
+    "window": {
+      "start": "2009-12-07",
+      "end": "2011-12-04"
+    },
+    "method": [
+      "one date per invoice: its first InvoiceDate",
+      "invoices dated within full ISO weeks 2009-W50 to 2011-W48",
+      "orders counted per (ISO year, ISO week); weeks without orders are left out of the means, as in the measurement of build-spec §5.4.1",
+      "raw index: mean orders per ISO week number, divided by the mean of the 52 week means (1.0 = an average week)"
+    ],
+    "invoices_in_window": 38459,
+    "weeks_without_orders": [
+      {
+        "iso_year": 2009,
+        "iso_week": 53
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 52
+      }
+    ],
+    "orders_per_iso_week": [
+      {
+        "iso_year": 2009,
+        "iso_week": 50,
+        "orders": 525
+      },
+      {
+        "iso_year": 2009,
+        "iso_week": 51,
+        "orders": 486
+      },
+      {
+        "iso_year": 2009,
+        "iso_week": 52,
+        "orders": 107
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 1,
+        "orders": 200
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 2,
+        "orders": 262
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 3,
+        "orders": 262
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 4,
+        "orders": 325
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 5,
+        "orders": 288
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 6,
+        "orders": 276
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 7,
+        "orders": 311
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 8,
+        "orders": 314
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 9,
+        "orders": 385
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 10,
+        "orders": 300
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 11,
+        "orders": 343
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 12,
+        "orders": 389
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 13,
+        "orders": 307
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 14,
+        "orders": 294
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 15,
+        "orders": 299
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 16,
+        "orders": 383
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 17,
+        "orders": 422
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 18,
+        "orders": 342
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 19,
+        "orders": 363
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 20,
+        "orders": 339
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 21,
+        "orders": 400
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 22,
+        "orders": 276
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 23,
+        "orders": 460
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 24,
+        "orders": 336
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 25,
+        "orders": 323
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 26,
+        "orders": 366
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 27,
+        "orders": 347
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 28,
+        "orders": 350
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 29,
+        "orders": 347
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 30,
+        "orders": 344
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 31,
+        "orders": 313
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 32,
+        "orders": 330
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 33,
+        "orders": 335
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 34,
+        "orders": 333
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 35,
+        "orders": 284
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 36,
+        "orders": 308
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 37,
+        "orders": 389
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 38,
+        "orders": 470
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 39,
+        "orders": 544
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 40,
+        "orders": 519
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 41,
+        "orders": 560
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 42,
+        "orders": 548
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 43,
+        "orders": 472
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 44,
+        "orders": 521
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 45,
+        "orders": 657
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 46,
+        "orders": 633
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 47,
+        "orders": 680
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 48,
+        "orders": 652
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 49,
+        "orders": 526
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 50,
+        "orders": 442
+      },
+      {
+        "iso_year": 2010,
+        "iso_week": 51,
+        "orders": 158
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 1,
+        "orders": 242
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 2,
+        "orders": 258
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 3,
+        "orders": 229
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 4,
+        "orders": 290
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 5,
+        "orders": 295
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 6,
+        "orders": 222
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 7,
+        "orders": 294
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 8,
+        "orders": 289
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 9,
+        "orders": 283
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 10,
+        "orders": 290
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 11,
+        "orders": 338
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 12,
+        "orders": 323
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 13,
+        "orders": 355
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 14,
+        "orders": 313
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 15,
+        "orders": 367
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 16,
+        "orders": 267
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 17,
+        "orders": 212
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 18,
+        "orders": 362
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 19,
+        "orders": 434
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 20,
+        "orders": 450
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 21,
+        "orders": 350
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 22,
+        "orders": 259
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 23,
+        "orders": 406
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 24,
+        "orders": 370
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 25,
+        "orders": 334
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 26,
+        "orders": 283
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 27,
+        "orders": 357
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 28,
+        "orders": 324
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 29,
+        "orders": 355
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 30,
+        "orders": 343
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 31,
+        "orders": 314
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 32,
+        "orders": 270
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 33,
+        "orders": 315
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 34,
+        "orders": 356
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 35,
+        "orders": 282
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 36,
+        "orders": 391
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 37,
+        "orders": 360
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 38,
+        "orders": 463
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 39,
+        "orders": 441
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 40,
+        "orders": 488
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 41,
+        "orders": 448
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 42,
+        "orders": 446
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 43,
+        "orders": 519
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 44,
+        "orders": 527
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 45,
+        "orders": 634
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 46,
+        "orders": 687
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 47,
+        "orders": 616
+      },
+      {
+        "iso_year": 2011,
+        "iso_week": 48,
+        "orders": 663
+      }
+    ],
+    "orders_december_to_november": {
+      "2009-12 to 2010-11": 19743,
+      "2010-12 to 2011-11": 18957
+    },
+    "index_raw": {
+      "1": 0.5879,
+      "2": 0.6917,
+      "3": 0.6531,
+      "4": 0.8181,
+      "5": 0.7755,
+      "6": 0.6624,
+      "7": 0.8048,
+      "8": 0.8021,
+      "9": 0.8886,
+      "10": 0.7848,
+      "11": 0.9059,
+      "12": 0.9471,
+      "13": 0.8806,
+      "14": 0.8074,
+      "15": 0.8859,
+      "16": 0.8646,
+      "17": 0.8433,
+      "18": 0.9365,
+      "19": 1.0602,
+      "20": 1.0495,
+      "21": 0.9976,
+      "22": 0.7117,
+      "23": 1.1519,
+      "24": 0.9391,
+      "25": 0.8739,
+      "26": 0.8633,
+      "27": 0.9365,
+      "28": 0.8966,
+      "29": 0.9338,
+      "30": 0.9138,
+      "31": 0.834,
+      "32": 0.7981,
+      "33": 0.8646,
+      "34": 0.9165,
+      "35": 0.7529,
+      "36": 0.9298,
+      "37": 0.9963,
+      "38": 1.2411,
+      "39": 1.3102,
+      "40": 1.3395,
+      "41": 1.3408,
+      "42": 1.3222,
+      "43": 1.3182,
+      "44": 1.394,
+      "45": 1.7173,
+      "46": 1.7559,
+      "47": 1.7239,
+      "48": 1.7492,
+      "49": 1.3994,
+      "50": 1.2863,
+      "51": 0.8566,
+      "52": 0.2847
+    },
+    "adjustments": {
+      "decisions": "build-spec §9.2 and §9.8",
+      "single_year_weeks": {
+        "51": 2009
+      },
+      "smoothed_weeks": {
+        "22": [
+          21,
+          23
+        ],
+        "35": [
+          34,
+          36
+        ],
+        "52": [
+          51,
+          1
+        ]
+      },
+      "rule": "in this order: each single-year week takes that year's count alone, over the raw average; each smoothed week takes the mean of its two neighbours (week 52's are the adjusted week 51 and week 1); the 52 values are rescaled to a mean of 1.0; week 53 takes week 52's value",
+      "why": "UK bank holidays (weeks 22, 35) and a wholesaler's Christmas closure (week 52, and week 51 of 2010) do not apply to an online consumer marketplace"
+    },
+    "index": {
+      "1": 0.5701,
+      "2": 0.6707,
+      "3": 0.6333,
+      "4": 0.7933,
+      "5": 0.752,
+      "6": 0.6424,
+      "7": 0.7804,
+      "8": 0.7778,
+      "9": 0.8616,
+      "10": 0.761,
+      "11": 0.8784,
+      "12": 0.9184,
+      "13": 0.8539,
+      "14": 0.783,
+      "15": 0.8591,
+      "16": 0.8384,
+      "17": 0.8178,
+      "18": 0.9081,
+      "19": 1.028,
+      "20": 1.0177,
+      "21": 0.9674,
+      "22": 1.0422,
+      "23": 1.117,
+      "24": 0.9107,
+      "25": 0.8474,
+      "26": 0.8371,
+      "27": 0.9081,
+      "28": 0.8694,
+      "29": 0.9055,
+      "30": 0.8861,
+      "31": 0.8088,
+      "32": 0.7739,
+      "33": 0.8384,
+      "34": 0.8887,
+      "35": 0.8952,
+      "36": 0.9016,
+      "37": 0.9661,
+      "38": 1.2035,
+      "39": 1.2705,
+      "40": 1.2989,
+      "41": 1.3002,
+      "42": 1.2821,
+      "43": 1.2783,
+      "44": 1.3518,
+      "45": 1.6652,
+      "46": 1.7026,
+      "47": 1.6717,
+      "48": 1.6962,
+      "49": 1.3569,
+      "50": 1.2473,
+      "51": 1.2538,
+      "52": 0.9119,
+      "53": 0.9119
+    }
+  },
+  "basket": {
+    "method": [
+      "consumer-like orders: sale lines of invoices with a Customer ID and 12 units or fewer in total (the retailer sells mostly wholesale)",
+      "products_per_order: number of invoices by count of distinct StockCodes",
+      "units_per_product: number of (invoice, StockCode) pairs by summed Quantity",
+      "sample from these counts, not from quantiles"
+    ],
+    "invoices_with_customer": 36594,
+    "consumer_invoices": 1840,
+    "products_per_order": {
+      "1": 1191,
+      "2": 311,
+      "3": 134,
+      "4": 71,
+      "5": 43,
+      "6": 41,
+      "7": 15,
+      "8": 6,
+      "9": 18,
+      "10": 4,
+      "11": 3,
+      "12": 3
+    },
+    "units_per_product": {
+      "1": 1404,
+      "2": 674,
+      "3": 205,
+      "4": 287,
+      "5": 51,
+      "6": 318,
+      "7": 9,
+      "8": 69,
+      "9": 16,
+      "10": 100,
+      "11": 5,
+      "12": 246
+    }
+  }
+}

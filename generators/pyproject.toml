@@ -1,0 +1,12 @@
+[project]
+name = "marketplace-generators"
+version = "0.1.0"
+description = "Albert's Marketplace generators: calibration, order history and live traffic"
+requires-python = "==3.12.*"
+dependencies = [
+    "pandas==3.0.5",
+    "python-calamine==0.8.2",
+]
+
+[tool.uv]
+package = false

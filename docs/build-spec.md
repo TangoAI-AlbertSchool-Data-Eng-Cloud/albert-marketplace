@@ -212,13 +212,21 @@ Result: 1,003,214 sale lines, 39,516 invoices.
 - Week 52 collapses (0.28) because a UK wholesaler closes for Christmas. An
   online consumer marketplace does not, so those three weeks are smoothed
   (§9.2).
-- Commit the computed index as `generators/history/calibration.json`, with its
-  method and attribution.
+- The computed index is `generators/history/calibration.json`, with its method
+  and attribution. `generators/history/calibrate.py` writes it:
+  `docker compose --profile build run --rm calibrate`, reading the xlsx from
+  `RETAIL_XLSX_DIR` (default `./data/online_retail_II`).
+- Two ISO weeks of the window have no orders, 2009-W53 and 2010-W52 (Christmas
+  closures). The means per week number leave them out, so week 52's 0.28 comes
+  from 2009 alone.
+- Week 51 is low too (0.86): 2010's closure had already begun (158 orders
+  against 486 in 2009). It takes its 2009 count alone (§9.8).
 
 #### 5.4.2 Basket profile (Online Retail II)
 
 **Do not use the raw baskets.** The retailer sells mostly wholesale:
-- products per invoice: median 15, mean 25.4, p90 52
+- lines per invoice: median 15, mean 25.4, p90 52 (distinct products: median
+  15, mean 25.1, p90 51)
 - units per line: median 4, p90 24
 
 Use **consumer-like orders:** invoices with a customer and 12 units or fewer in
@@ -346,6 +354,19 @@ It is a business-to-business working week.
    - after a load: database 320 MB, data directory 1.4 GB (mostly WAL written by
      the load), container memory 466 MiB
 4. **Calibration:** `calibration.json` and the consumer basket distributions.
+   *Done 2026-09-15 (§5.4.1). Verified:*
+   - `calibrate.py` reproduces every number in §5.4: 1,003,214 sale lines,
+     39,516 invoices, the 52 index values (within their 2-decimal rounding),
+     19,743 and 18,957 orders a year, 1,840 consumer-like invoices of 36,594
+     with a customer, and the basket quantiles
+   - two runs write byte-identical JSON; `generators/uv.lock` pins pandas
+     3.0.5, python-calamine 0.8.2 and numpy 2.5.3, on Python 3.12.12
+   - the adjustments (§9.2, §9.8) move week 51 from 0.86 to 1.25 (level with
+     week 50's 1.25), week 52 from 0.28 to 0.91, week 22 from 0.71 to 1.04 and
+     week 35 from 0.75 to 0.90; rescaling to a mean of 1.0 multiplies every
+     other week by 0.97
+   - the basket counts keep the pack-size spikes (§9.9): of 3,384 order lines,
+     318 have 6 units and 246 have 12
 5. **History generator,** then EU localisation, then shipments and carriers.
 6. **Storefront reconciliation and fixes.**
 7. **Load generator and Kafka.**
@@ -422,6 +443,13 @@ It is a business-to-business working week.
    step 3 found no 9-digit phone). Phones stay text with a leading 0, which
    pandas' `read_csv` defaults turn into 9-digit integers (§3). The EU
    regeneration keeps national formats with their leading 0 (§5.2).
+8. **Week 51 takes its 2009 count alone** (decided after step 4). 2010's
+   Christmas closure had already begun that week (158 orders against 486 in
+   2009), and an online shop's week before Christmas is busy. The adjustment
+   comes before smoothing, so week 52 averages the adjusted week 51 and week 1.
+9. **Units per product keep their pack-size spikes** (6, 12, 4, 8 and 10
+   units; decided after step 4). The measured distribution is used as it is and
+   listed in the dataset card as a generator assumption.
 
 ---
 

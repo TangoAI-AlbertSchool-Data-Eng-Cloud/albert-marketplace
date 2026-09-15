@@ -1,3 +1,10 @@
+-- migrate:up
+
+-- Baseline: the legacy schema from amazon-database-design (db_creation.sql and
+-- Triggers.sql, unchanged), plus APPLY_DAILY_DEALS with its three bugs fixed
+-- (docs/build-spec.md §10.1). The original procedure is kept in
+-- docs/critique/Procedures.original.sql.
+
 -- CUSTOMER TABLE
 CREATE TABLE CUSTOMER (
     C_ID   VARCHAR(40),
@@ -319,3 +326,97 @@ CREATE TABLE RETURNS (
         REFERENCES ORDERS ( ORDER_ID )
             ON DELETE SET NULL
 );
+
+-- STOCK TRIGGER: an order decrements stock by the buyer's cart lines
+CREATE OR REPLACE FUNCTION update_inventory()
+RETURNS TRIGGER AS $$
+DECLARE
+    this_item RECORD;
+    old_qty INTEGER;
+    new_qty INTEGER;
+BEGIN
+    FOR this_item IN
+        SELECT ci.p_id, ci.qty
+        FROM cart_items ci
+        JOIN cart c ON ci.cart_id = c.cart_id
+        WHERE c.buyer_id = NEW.buyer_id
+    LOOP
+        SELECT qty INTO old_qty
+        FROM product
+        WHERE p_id = this_item.p_id;
+
+        new_qty := old_qty - this_item.qty;
+
+        IF new_qty < 0 THEN
+            RAISE EXCEPTION 'Not enough stock for product %', this_item.p_id;
+        END IF;
+
+        UPDATE product
+        SET qty = new_qty
+        WHERE p_id = this_item.p_id;
+    END LOOP;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_update_inventory
+BEFORE INSERT ON orders
+FOR EACH ROW
+EXECUTE FUNCTION update_inventory();
+
+-- APPLY_DAILY_DEALS PROCEDURE
+CREATE OR REPLACE PROCEDURE APPLY_DAILY_DEALS(
+    IN cart_id INTEGER,
+    IN o_date DATE,
+    IN minimum_price NUMERIC,
+    INOUT total NUMERIC
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    this_product RECORD;
+    discount_percent NUMERIC := 0;
+    item_price NUMERIC;
+    item_discount NUMERIC;
+BEGIN
+    FOR this_product IN
+        -- The parameter shares the column's name: qualify both, or the
+        -- comparison is ambiguous (or always true)
+        SELECT * FROM cart_items
+        WHERE cart_items.cart_id = APPLY_DAILY_DEALS.cart_id
+    LOOP
+        -- No deal that day means no discount. A plain SELECT ... INTO finding
+        -- no row leaves the variable NULL; it never raises no_data_found.
+        discount_percent := COALESCE(
+            (SELECT discount
+             FROM daily_deals
+             WHERE p_id = this_product.p_id
+               AND deal_date = o_date),
+            0);
+
+        SELECT price INTO item_price
+        FROM product
+        WHERE p_id = this_product.p_id;
+
+        FOR i IN 1..this_product.qty LOOP
+            item_discount := (discount_percent / 100.0) * item_price;
+            total := total - item_discount;
+        END LOOP;
+
+        IF total < minimum_price THEN
+            total := minimum_price;
+        END IF;
+    END LOOP;
+END;
+$$;
+
+-- migrate:down
+
+DROP PROCEDURE APPLY_DAILY_DEALS;
+DROP TABLE RETURNS, SHIPMENT, ORDERS, DISCOUNT, CART_ITEMS, CART, CARRIER,
+    DAILY_DEALS, PRODUCT_IMAGES, PRODUCT_REVIEWS, SELLER_PRODUCTS,
+    WISHLIST_ITEM, PRODUCT, CATEGORY, REVIEW_IMAGES, SELLER_REVIEWS, REVIEW,
+    SELLER, BUYER, SUBSCRIPTION, CUSTOMER_PAYMENT, PAYMENT_DETAILS,
+    CUSTOMER_SHIPPING, SHIPPING_DETAILS, CUSTOMER;
+DROP FUNCTION update_inventory();

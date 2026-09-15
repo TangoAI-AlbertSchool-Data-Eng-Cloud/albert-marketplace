@@ -1,0 +1,39 @@
+# Albert's Marketplace: the company's side of the course.
+# `docker compose up` starts PostgreSQL and applies db/migrations.
+# Every value below has a local default; override any of them in the environment.
+name: albert-marketplace
+
+services:
+  db:
+    image: postgres:17.11
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-marketplace}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      # -h localhost checks over TCP: while the image initialises a new volume,
+      # PostgreSQL answers on its socket before it accepts TCP connections.
+      test: ['CMD-SHELL', 'pg_isready -h localhost -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    image: ghcr.io/amacneil/dbmate:2.35.1
+    command: ["--wait", "up"]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-marketplace}?sslmode=disable
+      DBMATE_MIGRATIONS_DIR: /db/migrations
+      DBMATE_NO_DUMP_SCHEMA: "true"
+    volumes:
+      - ./db/migrations:/db/migrations:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db_data:

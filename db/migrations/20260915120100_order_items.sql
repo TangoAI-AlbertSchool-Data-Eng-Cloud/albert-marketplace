@@ -1,0 +1,18 @@
+-- migrate:up
+
+-- ORDER_ITEMS TABLE: one row per product in an order (docs/build-spec.md §5.1)
+CREATE TABLE ORDER_ITEMS (
+    ORDER_ID           INTEGER       NOT NULL,
+    P_ID               VARCHAR(10)   NOT NULL,
+    QTY                INTEGER       NOT NULL CHECK ( QTY > 0 ),
+    PRICE_AT_PURCHASE  NUMERIC(10,2) NOT NULL CHECK ( PRICE_AT_PURCHASE >= 0 ),
+    PRIMARY KEY ( ORDER_ID, P_ID ),
+    CONSTRAINT OIORDERFK FOREIGN KEY ( ORDER_ID )
+        REFERENCES ORDERS ( ORDER_ID ) ON DELETE CASCADE,
+    CONSTRAINT OIPRODUCTFK FOREIGN KEY ( P_ID )
+        REFERENCES PRODUCT ( P_ID )
+);
+
+-- migrate:down
+
+DROP TABLE ORDER_ITEMS;

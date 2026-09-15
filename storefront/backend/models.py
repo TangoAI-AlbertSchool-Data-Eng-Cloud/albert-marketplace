@@ -66,9 +66,9 @@ class Orders(Base):
 class OrderItem(Base):
     __tablename__ = "order_items"
     order_id = Column(Integer, ForeignKey("orders.order_id"), primary_key=True)
-    p_id = Column(String, ForeignKey("product.p_id"), primary_key=True)
+    p_id = Column(String(10), ForeignKey("product.p_id"), primary_key=True)
     qty = Column(Integer, nullable=False)
-    price_at_purchase = Column(Float, nullable=False)
+    price_at_purchase = Column(Numeric(10, 2), nullable=False)
     order = relationship("Orders", back_populates="items")
     product = relationship("Product", back_populates="order_items")
 

@@ -81,7 +81,7 @@ def checkout_cart(db: Session, buyer_id: str, payment_method: str):
             order_id=order.order_id,
             p_id=item.p_id,
             qty=item.qty,
-            price_at_purchase=float(prod.price),
+            price_at_purchase=prod.price,
         )
         db.add(order_item)
         # Create shipment per item

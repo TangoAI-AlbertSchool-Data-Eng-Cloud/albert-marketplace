@@ -1,108 +1,50 @@
-# Amazon Mockup E‑Commerce
+# Storefront
 
-Welcome to the **Amazon Mockup E‑Commerce** project! This is a fully functional mockup e‑commerce application designed for students pursuing the Data Engineer certification [RNCP37172](https://www.francecompetences.fr/recherche/RNCP/37172/). It demonstrates end‑to‑end architecture using FastAPI, Streamlit, PostgreSQL, and Docker, giving you hands‑on experience building and deploying a modern web application.
+Albert's Marketplace's shop: a FastAPI backend (`backend/`) and a Streamlit UI
+(`streamlit_app.py`), on the company's PostgreSQL database.
 
----
+The database schema belongs to `db/migrations`. The API maps onto it with
+SQLAlchemy and never creates tables.
 
-## 🚀 Features
+## Run it
 
-* **User Registration & Authentication**: Secure signup and login with hashed passwords.
-* **Product Catalog**: Browse a selection of products retrieved from a PostgreSQL backend.
-* **Shopping Cart**: Add items to your cart, adjust quantities, and view your cart contents.
-* **Checkout & Orders**: Place an order, choose a payment method, and automatically generate order and shipment records.
-* **Shipment Tracking**: Track the status, carrier, and estimated delivery date for each item in your order.
-* **Dockerized Deployment**: Launch the entire stack (database, backend, frontend) with a single `docker-compose` command.
+From the repository root:
 
----
-
-## 🔧 Prerequisites
-
-* **Docker & Docker Compose** (v2.0+)
-* **Python** (3.9+)
-* **PostgreSQL** database (if you’d rather run it outside Docker)
-
----
-
-## 💻 Getting Started
-
-1. **Clone the repository**
-
-   ```bash
-   git clone https://github.com/your-org/amazon-mockup-e-commerce.git
-   cd amazon-mockup-e-commerce
-   ```
-
-2. **Configure Environment**
-
-   * Create a `.env` file in the project root.
-   * Add your database connection string:
-
-     ```env
-     DATABASE_URL=postgresql://<username>:<password>@<host>:<port>/<dbname>
-     ```
-
-3. **Launch with Docker Compose**
-
-   ```bash
-   docker-compose up --build
-   ```
-
-   This will spin up three services:
-
-   * **db**: PostgreSQL database with initial migrations applied.
-   * **backend**: FastAPI application exposed on port **8000**.
-   * **frontend**: Streamlit UI exposed on port **8501**.
-
-4. **Explore the App**
-
-   * Visit **[http://localhost:8501](http://localhost:8501)** to open the Streamlit storefront.
-   * Use the Streamlit UI to sign up, login (using a generated buyer ID), browse products, add to cart, and checkout.
-
----
-
-## 📂 Project Structure
-
-```plaintext
-├── backend
-│   ├── app
-│   │   ├── database.py       # SQLAlchemy setup
-│   │   ├── models.py         # ORM models
-│   │   ├── schemas.py        # Pydantic schemas
-│   │   ├── crud.py           # Business logic
-│   │   └── main.py           # FastAPI entrypoint
-│   └── Dockerfile
-├── streamlit_app.py          # Streamlit frontend
-├── docker-compose.yml        # Multi‑container setup
-├── requirements.txt          # Python dependencies
-└── README.md                 # This file
+```
+docker compose up --build
 ```
 
----
+This starts PostgreSQL, applies the migrations, then starts the API and the UI:
 
-## ⚙️ Environment Variables
+| What | Address | Port variable |
+|---|---|---|
+| API documentation (try every endpoint) | http://localhost:8100/docs | `API_PORT` |
+| UI | http://localhost:8510 | `UI_PORT` |
 
-| Name           | Description                            |
-| -------------- | -------------------------------------- |
-| `DATABASE_URL` | Connection string to your Postgres DB. |
+In the UI, enter a buyer ID from the `buyer` table, for example from
+`docker compose exec db psql -U postgres -d marketplace -c "SELECT buyer_id FROM buyer LIMIT 5"`.
 
----
+## API
 
-## 🤝 Contributing
+| Method and path | What it does |
+|---|---|
+| `GET /health` | 200 when the API can reach the database |
+| `POST /customers/` | Sign up: creates the customer and its buyer, password hashed with bcrypt |
+| `GET /products/?skip=&limit=` | Products, by product ID, at most 100 at a time |
+| `GET /products/{p_id}/images` | Image URLs of a product |
+| `GET /cart/{buyer_id}` | The buyer's cart, created when missing |
+| `POST /cart/{buyer_id}?p_id=&qty=` | Adds units to the cart, within the product's stock |
+| `DELETE /cart/{buyer_id}/{p_id}` | Removes a product from the cart |
+| `POST /checkout/{buyer_id}?payment_method=` | Places the order: order lines, one shipment per line, one payment; the stock trigger decrements stock |
+| `GET /orders/{buyer_id}` | The buyer's orders, with lines, payment and shipments |
+| `GET /shipments/{order_id}` | An order's shipments |
 
-Contributions are welcome! Whether you spot a bug, have an improvement, or just want to experiment:
+`payment_method` is `Credit Card` (the buyer's default saved card), `PayPal` or
+`Bank Transfer`. Errors come back as 400, 404, 409 or 422 with a `detail`
+message.
 
-1. Fork the repository.
-2. Create a new branch: `git checkout -b feature/my-awesome-feature`.
-3. Commit your changes: `git commit -m "Add my awesome feature"`.
-4. Push to your branch: `git push origin feature/my-awesome-feature`.
-5. Open a Pull Request and describe your changes.
+## Dependencies
 
----
-
-## 📄 License
-
-This project is released under the MIT License. See [LICENSE](LICENSE) for details.
-
----
-
-*Happy coding and good luck with your certification!*
+`requirements.in` (UI) and `backend/requirements.in` (API) list the direct
+dependencies; each `requirements.txt` pins every package. The command to
+regenerate a pinned file is at the top of its `.in` file.

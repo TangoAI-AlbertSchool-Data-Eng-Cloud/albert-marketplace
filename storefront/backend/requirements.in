@@ -1,0 +1,9 @@
+# Direct dependencies of the storefront API. requirements.txt pins every package:
+#   docker run --rm -v "$PWD:/w" -w /w ghcr.io/astral-sh/uv:0.9.30-python3.12-bookworm-slim \
+#     uv pip compile requirements.in -o requirements.txt --python-version 3.12
+fastapi
+uvicorn
+sqlalchemy
+psycopg2-binary
+pydantic[email]
+bcrypt

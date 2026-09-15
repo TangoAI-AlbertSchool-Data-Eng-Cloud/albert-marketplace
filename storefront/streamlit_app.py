@@ -1,79 +1,91 @@
-import streamlit as st
+import os
+
 import requests
+import streamlit as st
 
-API_URL = "http://backend:8000"
-st.title("E‑commerce Store")
+API_URL = os.environ.get("API_URL", "http://storefront-api:8000")
+PAYMENT_METHODS = ["Credit Card", "PayPal", "Bank Transfer"]
 
-# Authentication placeholder
-buyer_id = st.text_input("Enter your Buyer ID:")
+
+def api(method, path, **params):
+    """Call the storefront API; show its error and return None when the call fails."""
+    try:
+        response = requests.request(method, f"{API_URL}{path}", params=params, timeout=10)
+    except requests.RequestException:
+        st.error("The storefront API is not reachable.")
+        return None
+    if response.ok:
+        return response.json()
+    try:
+        detail = response.json().get("detail", response.text)
+    except ValueError:
+        detail = response.text
+    if isinstance(detail, list):  # validation errors
+        detail = "; ".join(error.get("msg", str(error)) for error in detail)
+    st.error(detail)
+    return None
+
+
+def euros(value):
+    return f"€{value:,.2f}"
+
+
+st.title("Albert's Marketplace")
+
+if notice := st.session_state.pop("notice", None):
+    st.success(notice)
+
+buyer_id = st.text_input("Enter your buyer ID:")
 
 if buyer_id:
-    # Fetch products
-    products = requests.get(f"{API_URL}/products/").json()
-    options = [f"{p['p_name']} — ${p['price']}" for p in products]
-    choice = st.selectbox("Select a product to add to cart", options)
+    cart = api("GET", f"/cart/{buyer_id}")
+    if cart is not None:
+        products = api("GET", "/products/") or []
+        if products:
+            labels = [f"{(p['p_name'] or p['p_id'])[:80]} — {euros(p['price'])}" for p in products]
+            index = st.selectbox("Select a product", range(len(products)), format_func=lambda i: labels[i])
+            selected = products[index]
 
-    # Determine selected product
-    idx = options.index(choice)
-    selected = products[idx]
+            image_urls = api("GET", f"/products/{selected['p_id']}/images") or []
+            if image_urls:
+                st.image(image_urls, width=200)
 
-    # Fetch and display product images
-    try:
-        imgs_resp = requests.get(
-            f"{API_URL}/products/{selected['p_id']}/images"
-        )
-        imgs_resp.raise_for_status()
-        images_data = imgs_resp.json()
-        # images_data may be list of URLs or list of dicts with 'p_image'
-        image_urls = []
-        for item in images_data:
-            if isinstance(item, str):
-                image_urls.append(item)
-            elif isinstance(item, dict) and 'p_image' in item:
-                image_urls.append(item['p_image'])
-        if image_urls:
-            st.image(
-                image_urls,
-                caption=[f"image {i+1}" for i in range(len(image_urls))],
-                width=200,
-            )
-    except requests.RequestException:
-        st.error("Failed to load product images.")
+            if selected["qty"] > 0:
+                qty = st.number_input("Quantity", min_value=1, max_value=selected["qty"], value=1)
+                if st.button("Add to cart"):
+                    if api("POST", f"/cart/{buyer_id}", p_id=selected["p_id"], qty=int(qty)) is not None:
+                        st.session_state["notice"] = f"Added {int(qty)} × {labels[index]}"
+                        st.rerun()
+            else:
+                st.warning("Out of stock.")
 
-    qty = st.number_input("Quantity", min_value=1, value=1)
-    if st.button("Add to cart"):
-        idx = options.index(choice)
-        p_id = products[idx]['p_id']
-        requests.post(f"{API_URL}/cart/{buyer_id}", params={"p_id": p_id, "qty": qty})
-        st.success(f"Added {qty}×{products[idx]['p_name']} to cart!")
+        st.header("Your cart")
+        if cart["items"]:
+            for item in cart["items"]:
+                line, remove = st.columns([4, 1])
+                line.write(f"{item['p_id']}: {item['qty']}")
+                if remove.button("Remove", key=f"remove-{item['p_id']}"):
+                    if api("DELETE", f"/cart/{buyer_id}/{item['p_id']}") is not None:
+                        st.rerun()
+            st.write(f"**Items:** {cart['total_qty']}")
+            st.write(f"**Total:** {euros(cart['total_price'])}")
 
-    # Display Cart
-    st.header("Your Cart")
-    cart = requests.get(f"{API_URL}/cart/{buyer_id}").json()
-    if cart['total_qty'] > 0:
-        for item in cart['items']:
-            st.write(f"{item['p_id']}: Qty {item['qty']}")
-        st.write(f"**Total items:** {cart['total_qty']}")
-        st.write(f"**Total price:** ${cart['total_price']:.2f}")
+            st.subheader("Checkout")
+            payment_method = st.selectbox("Payment method", PAYMENT_METHODS)
+            if st.button("Buy now"):
+                order = api("POST", f"/checkout/{buyer_id}", payment_method=payment_method)
+                if order is not None:
+                    st.session_state["last_order"] = order
+                    st.session_state["notice"] = f"Order {order['order_id']} placed: {euros(order['payment']['amount'])}"
+                    st.rerun()
+        else:
+            st.info("Your cart is empty.")
 
-        # Checkout
-        st.subheader("Checkout")
-        payment_method = st.selectbox(
-            "Choose payment method", ["Credit Card", "PayPal", "Bank Transfer"]
-        )
-        if st.button("Buy Now"):
-            order = requests.post(
-                f"{API_URL}/checkout/{buyer_id}", params={"payment_method": payment_method}
-            ).json()
-            # compute total from returned items
-            total_price = sum(item["qty"] * item["price_at_purchase"] for item in order["items"])
-            st.success(f"Order {order['order_id']} placed! Total: ${total_price:.2f}")
-            # Fetch shipments
-            shipments = requests.get(f"{API_URL}/shipments/{order['order_id']}").json()
-            st.subheader("Shipments")
-            for s in shipments:
-                st.write(f"Item {s['p_id']} via carrier {s['carrier_id']} - Status: {s['status']}")
-                if s.get('est_delivery_date'):
-                    st.write(f"Estimated Delivery: {s['est_delivery_date']}")
-    else:
-        st.info("Your cart is empty.")
+        order = st.session_state.get("last_order")
+        if order and order["buyer_id"] == buyer_id:
+            st.subheader(f"Shipments for order {order['order_id']}")
+            for shipment in order["shipments"]:
+                st.write(
+                    f"{shipment['p_id']}: {shipment['status']}, carrier {shipment['carrier_id']}, "
+                    f"estimated delivery {shipment['est_delivery_date']}"
+                )

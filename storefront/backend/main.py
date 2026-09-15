@@ -1,12 +1,21 @@
-import uvicorn
-from fastapi import FastAPI, Depends, HTTPException, APIRouter
-from typing import List
-from sqlalchemy.orm import Session
-import models, schemas, crud
-from database import engine, SessionLocal
+"""Albert's Marketplace storefront API.
 
-models.Base.metadata.create_all(bind=engine)
-app = FastAPI(title="Mock E‑commerce API")
+The schema belongs to db/migrations: this app maps onto it and never creates tables.
+"""
+
+from typing import List
+
+from fastapi import Depends, FastAPI, Query, Request
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+import crud
+import schemas
+from database import SessionLocal
+
+app = FastAPI(title="Albert's Marketplace storefront API")
+
 
 def get_db():
     db = SessionLocal()
@@ -15,59 +24,58 @@ def get_db():
     finally:
         db.close()
 
-@app.post("/customers/", response_model=schemas.Customer)
+
+@app.exception_handler(crud.StorefrontError)
+def storefront_error(request: Request, error: crud.StorefrontError):
+    return JSONResponse(status_code=error.status, content={"detail": str(error)})
+
+
+@app.get("/health")
+def health(db: Session = Depends(get_db)):
+    db.execute(text("SELECT 1"))
+    return {"status": "ok"}
+
+
+@app.post("/customers/", response_model=schemas.Customer, status_code=201)
 def create_customer(customer: schemas.CustomerCreate, db: Session = Depends(get_db)):
-    if crud.get_customer_by_email(db, email=customer.email):
-        raise HTTPException(status_code=400, detail="Email already registered")
     return crud.create_customer(db, customer)
 
+
 @app.get("/products/", response_model=List[schemas.Product])
-def read_products(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_products(skip: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=100), db: Session = Depends(get_db)):
     return crud.list_products(db, skip=skip, limit=limit)
+
+
+@app.get("/products/{p_id}/images", response_model=List[str], summary="List image URLs for a product")
+def read_product_images(p_id: str, db: Session = Depends(get_db)):
+    return crud.get_product_images(db, p_id)
+
 
 @app.get("/cart/{buyer_id}", response_model=schemas.Cart)
 def read_cart(buyer_id: str, db: Session = Depends(get_db)):
-    cart = crud.get_or_create_cart(db, buyer_id)
-    return cart
+    return crud.get_or_create_cart(db, buyer_id)
+
 
 @app.post("/cart/{buyer_id}", response_model=schemas.Cart)
-def add_cart_item(buyer_id: str, p_id: str, qty: int = 1, db: Session = Depends(get_db)):
+def add_cart_item(buyer_id: str, p_id: str, qty: int = Query(1, ge=1, le=1000), db: Session = Depends(get_db)):
     return crud.add_to_cart(db, buyer_id, p_id, qty)
 
-@app.post("/checkout/{buyer_id}", response_model=schemas.Orders)
-def checkout(buyer_id: str, payment_method: str, db: Session = Depends(get_db)):
-    try:
-        return crud.checkout_cart(db, buyer_id, payment_method)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+
+@app.delete("/cart/{buyer_id}/{p_id}", response_model=schemas.Cart)
+def remove_cart_item(buyer_id: str, p_id: str, db: Session = Depends(get_db)):
+    return crud.remove_from_cart(db, buyer_id, p_id)
+
+
+@app.post("/checkout/{buyer_id}", response_model=schemas.Orders, status_code=201)
+def checkout(buyer_id: str, payment_method: schemas.PaymentMethod, db: Session = Depends(get_db)):
+    return crud.checkout_cart(db, buyer_id, payment_method)
+
 
 @app.get("/orders/{buyer_id}", response_model=List[schemas.Orders])
 def get_orders(buyer_id: str, db: Session = Depends(get_db)):
     return crud.list_orders(db, buyer_id)
 
+
 @app.get("/shipments/{order_id}", response_model=List[schemas.Shipment])
 def get_shipments(order_id: int, db: Session = Depends(get_db)):
-    shipments = crud.list_shipments(db, order_id)
-    if not shipments:
-        raise HTTPException(status_code=404, detail="No shipments found for this order")
-    return shipments
-
-@app.get(
-    "/products/{p_id}/images",
-    response_model=List[str],
-    summary="List image URLs for a product",
-)
-def read_product_images(p_id: str, db: Session = Depends(get_db)):
-    """
-    Fetch all image URLs for product `p_id` from the product_images table.
-    """
-    imgs = crud.get_product_images(db, p_id)
-    if not imgs:
-        # 404 if you want, or just return []
-        raise HTTPException(status_code=404, detail="No images found for this product")
-    return [img.p_image for img in imgs]
-
-
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    return crud.list_shipments(db, order_id)

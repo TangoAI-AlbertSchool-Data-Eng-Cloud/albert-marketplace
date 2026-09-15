@@ -35,6 +35,37 @@ services:
       db:
         condition: service_healthy
 
+  # Storefront API: http://localhost:8100/docs (API_PORT changes the host port)
+  storefront-api:
+    build:
+      context: ./storefront
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-marketplace}
+    ports:
+      - "${API_PORT:-8100}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  # Storefront UI: http://localhost:8510 (UI_PORT changes the host port)
+  storefront-ui:
+    build:
+      context: ./storefront
+      dockerfile: Dockerfile-streamlit
+    environment:
+      API_URL: http://storefront-api:8000
+    ports:
+      - "${UI_PORT:-8510}:8501"
+    depends_on:
+      storefront-api:
+        condition: service_healthy
+
   # Build time only, to rebuild the dataset from the legacy CSV extract:
   #   docker compose --profile build run --rm load-legacy
   # LEGACY_CSV_DIR is the folder holding the 25 CSVs (default ./data/legacy_csv).

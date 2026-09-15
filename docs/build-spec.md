@@ -107,6 +107,7 @@ To reconcile before anything runs together:
 
 **Recommendation:** the SQL migrations own the schema; the storefront stops
 calling `create_all()` and maps onto them. The payment model is decided in §9.1.
+Both done in step 6.
 
 ---
 
@@ -455,6 +456,31 @@ It is a business-to-business working week.
    - after generation: database 506 MB, data directory 1.6 GB, container memory
      355 MiB
 6. **Storefront reconciliation and fixes.**
+   *Done 2026-09-15. Verified on a no-cache build, with the generated history
+   (seed 7, end date 2026-09-15):*
+   - `docker compose up` builds and starts `storefront-api` and `storefront-ui`
+     after the migrations, without a `.env`; the API is healthy on first
+     start, with no restarts. Host ports default to 8100 (API) and 8510 (UI),
+     away from Airbyte's 8000, Airflow's 8080 and Streamlit's 8501
+   - the storefront no longer creates tables: the schema is identical before
+     and after it starts, and every mapped model column matches the migrated
+     schema (names, types, lengths, primary and foreign keys)
+   - every failure in §10.2 is fixed and tested: sign-up (bcrypt, and a buyer
+     row), order history with its payment and every shipment, 404, 409 or 422
+     instead of 500s, stock checked when adding to the cart, a
+     remove-from-cart endpoint, and the trigger's stock refusal returned as a
+     409 that keeps the cart
+   - checkout uses the buyer's default card, rounds prices to cents, assigns a
+     carrier and writes the payment amount; a card payment without a saved
+     card is refused, while PayPal and bank transfer need none. Sign-up
+     passwords need 8 characters to 72 bytes
+   - the UI shows euros and the API's errors; a headless run of its flow
+     (buyer, add to cart, pay, shipments) passes
+   - images on `python:3.12.12-slim-bookworm`, running as a non-root user, with
+     every dependency pinned: API 265 MB (was 821 MB), UI 776 MB (was 818 MB).
+     Memory at rest: API 57 MiB, UI 48 MiB
+   - the original Dockerfile is `docs/critique/Dockerfile.original`; the
+     `.DS_Store` files and `storefront/docker-compose.yaml` are gone
 7. **Load generator and Kafka.**
 8. **Release packaging,** then the `--scale` copy.
 
@@ -625,7 +651,7 @@ unmapped `category`. A legacy buyer's checkout writes the order, one
 trigger decrements stock and the cart is emptied. Streamlit answers on its port
 and health check.
 
-**What breaks:**
+**What breaks** (all fixed in step 6, §6):
 
 | # | Symptom | Cause |
 |---|---|---|

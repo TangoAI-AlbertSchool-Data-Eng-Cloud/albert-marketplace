@@ -29,15 +29,16 @@ adapted, in the order of `docs/build-spec.md` §6:
   loads the legacy CSV extract
   with its defects.
 - `storefront/`: from `JedhaBootcamp/amazon-mockup-e-commerce`. FastAPI +
-  Streamlit. Not yet reconciled with the migrations; its own
-  `docker-compose.yaml` still runs PostgreSQL 13.
+  Streamlit, mapped onto the migrations (it never creates tables), with every
+  dependency pinned. `storefront/README.md` lists its endpoints.
 - `generators/`: a uv project (Python 3.12, pinned in `uv.lock`), run in
   containers. `history/calibrate.py` writes `history/calibration.json` from
   Online Retail II; `history/generate.py` generates the order history on the
   loaded legacy data, with addresses from `history/places.json` (GeoNames
   postcodes and Eurostat regional populations), which `history/places.py`
   builds.
-- `compose.yaml` at the root: PostgreSQL 17, the `migrate` service, and
+- `compose.yaml` at the root: PostgreSQL 17, the `migrate` service, the
+  storefront (`storefront-api` on port 8100, `storefront-ui` on 8510), and
   `load-legacy`, `calibrate`, `fetch-places` and `generate-history` behind the
   `build` profile.
   Tear those down with `docker compose --profile build down`: a plain `down`

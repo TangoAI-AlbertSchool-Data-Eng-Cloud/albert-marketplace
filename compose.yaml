@@ -35,5 +35,24 @@ services:
       db:
         condition: service_healthy
 
+  # Build time only, to rebuild the dataset from the legacy CSV extract:
+  #   docker compose --profile build run --rm load-legacy
+  # LEGACY_CSV_DIR is the folder holding the 25 CSVs (default ./data/legacy_csv).
+  load-legacy:
+    image: postgres:17.11
+    profiles: ["build"]
+    entrypoint: ["psql", "--no-psqlrc", "--file", "/load/load_legacy.sql"]
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      PGDATABASE: ${POSTGRES_DB:-marketplace}
+    volumes:
+      - ./db/load_legacy.sql:/load/load_legacy.sql:ro
+      - ${LEGACY_CSV_DIR:-./data/legacy_csv}:/csv:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
 volumes:
   db_data:

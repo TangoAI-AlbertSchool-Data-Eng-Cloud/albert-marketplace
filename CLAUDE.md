@@ -23,13 +23,15 @@ ingest from.
 Two earlier repos by Charles are imported with their history and are being
 adapted, in the order of `docs/build-spec.md` §6:
 - `db/`: from `JedhaBootcamp/amazon-database-design`. The notebook that built
-  the original data, the diagrams, and `db/migrations/` (dbmate, plain SQL): a
+  the original data, the diagrams, `db/migrations/` (dbmate, plain SQL: a
   baseline with the legacy schema, trigger and fixed procedure, then
-  `order_items`.
+  `order_items`), and `db/load_legacy.sql`, which loads the legacy CSV extract
+  with its defects.
 - `storefront/`: from `JedhaBootcamp/amazon-mockup-e-commerce`. FastAPI +
   Streamlit. Not yet reconciled with the migrations; its own
   `docker-compose.yaml` still runs PostgreSQL 13.
-- `compose.yaml` at the root: PostgreSQL 17 and the `migrate` service.
+- `compose.yaml` at the root: PostgreSQL 17, the `migrate` service, and
+  `load-legacy` behind the `build` profile.
 - `docs/critique/`: originals the course critiques, kept unchanged.
 
 **Read `docs/build-spec.md` before changing anything.** It is the plan, and it
@@ -60,7 +62,8 @@ notes are not.
   - card numbers with CVV
   - duplicate orders
   - `Unnamed: 0` index columns
-  - 9-digit phone numbers
+  - phone numbers stored as text with a leading zero, which pandas' `read_csv`
+    defaults turn into 9-digit integers
 - **Defects in running code are not deliberate.** Fix those (the storefront's
   Docker setup, for example), but keep a copy of anything the course uses as a
   "critique this" exercise.
@@ -98,6 +101,9 @@ notes are not.
   `docker info` before any container work.
 - **Ports 8501 and 57744-58413 are unavailable here:** another project's
   container holds 8501, and Windows reserves the rest.
+- **Windows application control blocks compiled packages that uv downloads**
+  (pandas failed with "DLL load failed"). Pure-Python scripts run on the host;
+  run anything that needs pandas or similar in a `python` container.
 
 ## Owner
 

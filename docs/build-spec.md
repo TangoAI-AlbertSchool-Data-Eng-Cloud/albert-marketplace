@@ -45,11 +45,16 @@ first session in October 2026. Lesson 01's demo reads the historical export.
 ## 3. The original data (profiled 2026-09-14)
 
 Source: the CSV extract in `TANGOAI_EDUCATION_assets/datasets/Amazon/` (see
-`CLAUDE.md`). **Every CSV has a spurious `Unnamed: 0` index column.**
+`CLAUDE.md`). **Every CSV has a spurious index column,** written by pandas with
+an empty header, which pandas reads back as `Unnamed: 0`.
+
+This profile read the CSVs with pandas' `read_csv` defaults. What those defaults
+change (phones, NA-like strings, empty texts) was corrected from the raw files
+in §10.3 and step 3.
 
 | Table | Rows | Notes |
 |---|---|---|
-| `customer` | 130,766 | 100,000 buyers + 30,766 sellers. `pwd` is a random 12-character string in plaintext. Phones are 9 digits (leading zero lost) in `CHAR(10)`. 4 first names are the strings `None`, `NA`, `N/A`, `NULL`, which pandas reads as null (§10.3). Fake email domains |
+| `customer` | 130,766 | 100,000 buyers + 30,766 sellers. `pwd` is a random plaintext string of 12 characters (one has 20). Phones are 10-character strings starting with 0, in `CHAR(10)`; pandas reads them as integers, so they show as 9 digits (one as `0`), and the same happens to the phones in `shipping_details`. 4 first names are the strings `None`, `NA`, `N/A`, `NULL`, which pandas reads as null (§10.3). Fake email domains |
 | `buyer` / `seller` | 100,000 / 30,766 | `seller` has no `SELLER_NAME` column, although the schema declares one |
 | `shipping_details` / `customer_shipping` | 200,001 each | US addresses from Faker |
 | `payment_details` / `customer_payment` | 100,000 each | Card number, **CVV**, expiry 2026-2030, billing address. One payment per buyer |
@@ -131,6 +136,10 @@ CREATE TABLE ORDER_ITEMS (
 ### 5.2 Europe (decided)
 
 - Regenerate `shipping_details` and phone numbers with EU Faker locales.
+  - Phones stay text in each country's national format, keeping the leading 0
+    where the country uses one (§9.7). Spanish numbers have none.
+  - German numbers run to 11 or 12 digits and do not fit `CHAR(10)`: settle
+    that in step 5.
 - `STATE` holds a region.
 - Prices are read as EUR.
 - Names, emails and IDs stay.
@@ -280,12 +289,20 @@ It is a business-to-business working week.
   §10.1.
 - **Keep the original `db/Procedures.sql` as
   `docs/critique/Procedures.original.sql`,** as a critique exercise.
-- **The loader:**
+- **The loader is `db/load_legacy.sql`:** plain SQL run by `psql` from the
+  PostgreSQL image, as the `load-legacy` service behind the `build` compose
+  profile. `LEGACY_CSV_DIR` names the folder holding the 25 CSVs (default
+  `./data/legacy_csv`):
+  `docker compose --profile build run --rm load-legacy`. It:
+  - stages each CSV as text, leaves out the `Unnamed: 0` column, and casts into
+    the legacy tables in foreign-key order
+  - empties the legacy tables and `order_items` first, all in one transaction,
+    so a rerun gives the same database and a failed run changes nothing
   - writes the 6 empty `PRODUCT.P_NAME` and 14 empty `REVIEW.R_DESC` as empty
     strings, so the `NOT NULL` constraints stay
   - keeps the NA-like strings (`None`, `NA`, `N/A`, `NULL`) as text
-  - sets every identity sequence past its table's highest loaded id
-  - loads `orders` before creating `trg_update_inventory`, or with it disabled
+  - sets every identity sequence to its table's highest loaded id
+  - loads `orders` with `trg_update_inventory` disabled
 
 ---
 
@@ -308,6 +325,26 @@ It is a business-to-business working week.
    - the storefront's updated `OrderItem` model checks out `NUMERIC` lines,
      through the stock trigger
 3. **Loader:** CSVs → PostgreSQL, keeping the defects.
+   *Done 2026-09-15 (§5.8). Verified on a fresh database:*
+   - the load takes about 20 s, and every table's row count matches §3
+   - loading twice gives identical tables and sequences (md5 of every table)
+   - a run that fails part-way (a missing CSV) leaves the database unchanged
+   - the loader runs the same with Windows line endings, as a Windows checkout
+     has it
+   - `customer`, `shipping_details`, `payment_details`, `subscription`,
+     `seller`, `review`, `product` and `orders` match their CSVs value for
+     value, including every digit of the prices
+   - the defects are still there: 130,766 plaintext passwords, CVVs (961 with
+     one digit, 8,440 with two), 24,375 orders repeating (buyer, payment,
+     date), the 4 NA-like first names, 6 empty product names, 14 empty review
+     texts, 35,205 prices with more than two decimals
+   - no phone has 9 digits: all 330,767 (customers and addresses) are
+     10-character strings starting with 0. pandas' `read_csv` defaults read
+     them as integers, which drops the zero (§3)
+   - identity sequences sit at each table's highest id (the next default order
+     id is 222,645), and the stock trigger is enabled again
+   - after a load: database 320 MB, data directory 1.4 GB (mostly WAL written by
+     the load), container memory 466 MiB
 4. **Calibration:** `calibration.json` and the consumer basket distributions.
 5. **History generator,** then EU localisation, then shipments and carriers.
 6. **Storefront reconciliation and fixes.**
@@ -381,6 +418,10 @@ It is a business-to-business working week.
    The original is kept as a critique exercise (§5.8).
 6. **Empty `PRODUCT.P_NAME` (6) and `REVIEW.R_DESC` (14):** loaded as empty
    strings, so the `NOT NULL` constraints stay. Listed as a defect.
+7. **Phones: the defect is the leading zero, not 9-digit values** (decided after
+   step 3 found no 9-digit phone). Phones stay text with a leading 0, which
+   pandas' `read_csv` defaults turn into 9-digit integers (§3). The EU
+   regeneration keeps national formats with their leading 0 (§5.2).
 
 ---
 

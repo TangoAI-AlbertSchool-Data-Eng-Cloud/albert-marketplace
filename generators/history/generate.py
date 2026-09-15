@@ -10,7 +10,8 @@ Runs after db/load_legacy.sql, in one transaction (docs/build-spec.md §5.2, §5
 - writes one PAYMENT per order and one SHIPMENT per order line, with four
   fictional carriers
 - moves every customer to one of six European countries: a national mobile
-  number, addresses from the GeoNames snapshot in places.json with streets from
+  number, addresses spread like each country's regional population from
+  places.json (GeoNames postcodes, Eurostat populations) with streets from
   Faker, and billing addresses rebuilt from the default address
 
     docker compose --profile build run --rm generate-history [--seed N] [--end-date YYYY-MM-DD]
@@ -225,6 +226,27 @@ def build_rows(rng, orders, n, originals, twins, lines, end):
     return order_dates, items, payments, shipments
 
 
+def place_chooser(rows, regions):
+    """Group a country's places by region and postcode, with regions weighted by population."""
+    postcodes = {}
+    for postcode, town, region in rows:
+        postcodes.setdefault(region, {}).setdefault(postcode, []).append(town)
+    names = sorted(postcodes)
+    missing = [name for name in names if name not in regions]
+    if missing:
+        raise SystemExit(f"no population for regions {missing}: rebuild places.json with fetch-places")
+    cumulative = np.cumsum([regions[name]["population"] for name in names], dtype=float)
+    return names, cumulative / cumulative[-1], {name: sorted(postcodes[name].items()) for name in names}
+
+
+def draw_place(rng, chooser):
+    """A region by population, a postcode uniformly within it, a town uniformly within the postcode (§9.16)."""
+    names, cumulative, postcodes = chooser
+    region = names[int(np.searchsorted(cumulative, rng.random(), side="right"))]
+    postcode, towns = postcodes[region][int(rng.integers(len(postcodes[region])))]
+    return postcode, towns[int(rng.integers(len(towns)))], region
+
+
 def localise(rng, customers, addresses, cards, places):
     codes = list(COUNTRIES)
     population = np.array([COUNTRIES[code][1] for code in codes], dtype=float)
@@ -250,11 +272,11 @@ def localise(rng, customers, addresses, cards, places):
         fakers[locale] = Faker(locale)
         fakers[locale].seed_instance(int(rng.integers(2**32)))
 
+    choosers = {code: place_chooser(places["countries"][code], places["regions"][code]) for code in COUNTRIES}
     new_addresses, default_address = [], {}
     for address_id, c_id, is_default in addresses:
         country = country_of[c_id]
-        # Towns are drawn uniformly: GeoNames has no population figures (§9.16)
-        postcode, town, region = places[country][int(rng.integers(len(places[country])))]
+        postcode, town, region = draw_place(rng, choosers[country])
         if country == "NL":
             postcode = f"{postcode} {DUTCH_POSTCODE_LETTERS[int(rng.integers(len(DUTCH_POSTCODE_LETTERS)))]}"
         locale = "fr_FR" if country == "BE" and region == WALLONIA else STREET_LOCALES[country]
@@ -334,7 +356,7 @@ def write_places(cur, phones, addresses, billing):
 def main():
     args = parse_args()
     calibration = json.loads(CALIBRATION.read_text(encoding="utf-8"))
-    places = json.loads(PLACES.read_text(encoding="utf-8"))["countries"]
+    places = json.loads(PLACES.read_text(encoding="utf-8"))
     # Independent streams, so a change to one step leaves the others' draws alone
     dates_rng, lines_rng, rows_rng, places_rng = (
         np.random.default_rng(s) for s in np.random.SeedSequence(args.seed).spawn(4)

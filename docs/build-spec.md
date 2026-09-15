@@ -149,6 +149,12 @@ CREATE TABLE ORDER_ITEMS (
     - Italy 18,415, Spain 37,867, the Netherlands 4,321, Belgium 2,781.
     - German and Dutch region names are in the country's language; Spanish
       names stay without accents, as GeoNames has them.
+    - Each region carries its population from Eurostat (`demo_r_pjanaggr3`,
+      population on 1 January 2025, updated 2026-08-28): NUTS 1 regions for
+      France, Germany and
+      Belgium, NUTS 2 regions for Italy, Spain and the Netherlands, with
+      Trentino-Alto Adige summing Bolzano and Trento. French overseas regions
+      are not in the GeoNames file, so they carry no weight.
   - Mobile numbers use simplified national prefixes (FR 06 or 07, DE 015, 016
     or 017, IT 3, ES 6 or 7, NL 06, BE 04), unique per customer.
   - Phones stay text in each country's national format, digits only, keeping
@@ -321,7 +327,8 @@ It is a business-to-business working week.
 - **Dataset card:**
   - CC BY-SA 4.0
   - attribution (Amazon Reviews'23; Online Retail II for calibration; GeoNames
-    postal codes for addresses; Eurostat population for the country mix)
+    postal codes for addresses; Eurostat population for the country mix and
+    the regional weights)
   - every deliberate defect
   - every generator assumption
   - the seed and end date the dataset was generated with
@@ -438,10 +445,11 @@ It is a business-to-business working week.
      postcode reads `1234 AB` without SS, SD or SA; Walloon streets are French,
      Flemish and Brussels streets Dutch; every billing address is the default
      address glued
-   - region shares follow the uniform draw over towns, far from population:
-     Galicia and Asturias hold 36.7% of Spanish addresses and Madrid 1.4%;
-     Île-de-France holds 3.5% of French addresses; Nordrhein-Westfalen 5.8%
-     and Rheinland-Pfalz 15.3% of German ones
+   - region shares match regional population, with a total variation distance
+     of 0.006 (France, Germany, Belgium) to 0.013 (Spain): for example
+     Île-de-France holds 19.0% of French addresses against 18.8% of the
+     population, Madrid 14.5% against 14.5%, Nordrhein-Westfalen 21.6% against
+     21.6%, Galicia and Asturias together 7.6% against 7.6%
    - the storefront's checkout continues the sequences and writes its `PAYMENT`
      row with the amount and, for card payments, the buyer's default card
    - after generation: database 506 MB, data directory 1.6 GB, container memory
@@ -557,8 +565,13 @@ It is a business-to-business working week.
     5): real postcode, town and region combinations for the six countries, with
     street names from Faker in the country's language. The generator reads a
     committed snapshot, because GeoNames updates its files daily.
-    - Towns are drawn uniformly: the files have no population figures, so small
-      places are over-represented. The dataset card says so.
+    - Addresses follow each country's regional population: a region is drawn
+      by its Eurostat population, then a postcode uniformly within the region,
+      then a town uniformly within the postcode. GeoNames has no population
+      below the region, so small places stay over-represented within each
+      region; the dataset card says so. (Changed after the first generation,
+      which drew towns uniformly and gave Galicia and Asturias 36.7% of
+      Spanish addresses and Madrid 1.4%.)
     - The Dutch file has only the four digits of each postcode, so the generator
       adds the two letters. It never uses SS, SD or SA, which Dutch postcodes
       avoid because of their association with the Schutzstaffel, the

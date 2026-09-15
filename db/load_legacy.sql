@@ -4,15 +4,16 @@
 -- Run it with:  docker compose --profile build run --rm load-legacy
 -- The CSV folder is LEGACY_CSV_DIR (default ./data/legacy_csv), mounted at /csv.
 --
--- Idempotent: every run empties the legacy tables and order_items, then reloads
--- them in one transaction, so a failed run leaves the database as it was.
+-- Idempotent: every run empties the legacy tables and the tables the history
+-- generator fills (order_items, payment), then reloads them in one transaction,
+-- so a failed run leaves the database as it was.
 
 \set ON_ERROR_STOP on
 \encoding UTF8
 
 BEGIN;
 
-TRUNCATE order_items, returns, shipment, orders, discount, cart_items, cart,
+TRUNCATE payment, order_items, returns, shipment, orders, discount, cart_items, cart,
     carrier, daily_deals, product_images, product_reviews, seller_products,
     wishlist_item, product, category, review_images, seller_reviews, review,
     seller, buyer, subscription, customer_payment, payment_details,

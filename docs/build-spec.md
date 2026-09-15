@@ -135,7 +135,22 @@ CREATE TABLE ORDER_ITEMS (
 
 ### 5.2 Europe (decided)
 
-- Regenerate `shipping_details` and phone numbers with EU Faker locales.
+- Regenerate `shipping_details` and phone numbers for Europe: postcode, town and
+  region from GeoNames, streets from Faker locales (§9.16).
+  - In the extract every address's phone is its customer's phone (200,001 of
+    200,001), and sellers have no address. The regenerated data keeps both.
+  - `generators/history/places.py` builds the snapshot `places.json`
+    (`docker compose --profile build run --rm fetch-places`). The snapshot
+    downloaded on 2026-09-15 (5.7 MB) keeps 115,666 places:
+    - France: 37,232 of 51,611 GeoNames rows. Only 5-digit postcodes, so no
+      CEDEX business codes.
+    - Germany: 15,050 of 23,297 rows. Only rows with a GeoNames accuracy, which
+      drops the large-customer postcodes named after companies.
+    - Italy 18,415, Spain 37,867, the Netherlands 4,321, Belgium 2,781.
+    - German and Dutch region names are in the country's language; Spanish
+      names stay without accents, as GeoNames has them.
+  - Mobile numbers use simplified national prefixes (FR 06 or 07, DE 015, 016
+    or 017, IT 3, ES 6 or 7, NL 06, BE 04), unique per customer.
   - Phones stay text in each country's national format, digits only, keeping
     the leading 0 where the country uses one (§9.7). Spanish numbers have none.
   - The phone columns are `VARCHAR(15)`, because German mobiles have 11 or 12
@@ -151,7 +166,10 @@ CREATE TABLE ORDER_ITEMS (
 - Prices are read as EUR.
 - Names, emails and IDs stay.
 - **Country mix (decided, §9.3):** FR, DE, IT, ES, NL, BE, weighted by Eurostat
-  population, cited in the dataset card.
+  population, cited in the dataset card. Population on 1 January 2026 (Eurostat
+  `tps00001`, updated 2026-07-21): DE 83,467,117 (28.7%), FR 69,112,309
+  (23.7%), IT 58,942,828 (20.2%), ES 49,590,099 (17.0%), NL 18,130,208 (6.2%),
+  BE 11,955,308 (4.1%).
 
 ### 5.3 Dates (decided)
 
@@ -198,9 +216,13 @@ CREATE TABLE ORDER_ITEMS (
    - estimated delivery = order + 7 days (the storefront's rule)
    - status and actual delivery date derived from how old the order is at
      `--end-date` (§9.14), documented as an assumption
-   - `CARRIER` holds a handful of **fictional** carriers
+   - `CARRIER` holds four **fictional** carriers, drawn uniformly for each
+     shipment (an assumption for the dataset card)
 8. **Determinism:** one seed; a checksum of the output is written with the
    release.
+9. **Payments:** one `PAYMENT` per order (§9.12), with the order's card, the
+   amount of its lines, method `Credit Card` and status `completed`, at a
+   uniform time of day on the order date (an assumption for the dataset card).
 
 #### 5.4.1 Week-of-year index (Online Retail II)
 
@@ -298,7 +320,8 @@ It is a business-to-business working week.
   - `CHECKSUMS`
 - **Dataset card:**
   - CC BY-SA 4.0
-  - attribution (Amazon Reviews'23; Online Retail II for calibration)
+  - attribution (Amazon Reviews'23; Online Retail II for calibration; GeoNames
+    postal codes for addresses; Eurostat population for the country mix)
   - every deliberate defect
   - every generator assumption
   - the seed and end date the dataset was generated with
@@ -322,7 +345,8 @@ It is a business-to-business working week.
   `docker compose --profile build run --rm load-legacy`. It:
   - stages each CSV as text, leaves out the `Unnamed: 0` column, and casts into
     the legacy tables in foreign-key order
-  - empties the legacy tables and `order_items` first, all in one transaction,
+  - empties the legacy tables, `order_items` and `payment` first, all in one
+    transaction,
     so a rerun gives the same database and a failed run changes nothing
   - writes the 6 empty `PRODUCT.P_NAME` and 14 empty `REVIEW.R_DESC` as empty
     strings, so the `NOT NULL` constraints stay
@@ -386,6 +410,42 @@ It is a business-to-business working week.
    - the basket counts keep the pack-size spikes (§9.9): of 3,384 order lines,
      318 have 6 units and 246 have 12
 5. **History generator,** then EU localisation, then shipments and carriers.
+   *Done 2026-09-15 (`generators/history/generate.py` and `places.py`, compose
+   services `generate-history` and `fetch-places`). Verified with seed 7 and
+   end date 2026-09-15:*
+   - generation, including the legacy reload, takes about 45 s; two runs give
+     identical tables and sequences, and seed 8 changes only the generated
+     tables
+   - adding the localisation left every history table byte-identical
+   - 222,644 orders dated 2023-09-15 to 2026-09-14, 408,560 order lines,
+     222,644 payments (revenue €39,199,900.62), 408,560 shipments, 4 carriers
+   - every original's lines include its reviewed product and every twin has its
+     original's lines; twin gaps match the measured shares (total variation
+     distance 0.004)
+   - products per order and units per line match `calibration.json` (total
+     variation distance 0.004 and 0.003); orders per ISO week number fit the
+     adjusted index (chi-square 55.9 on 51 degrees of freedom)
+   - line prices are product prices rounded to cents; the 30 €0.00 lines are the
+     first lines of the 15 reviews' orders (§9.4); no extra line uses a product
+     without reviews
+   - each payment's amount equals its lines, uses the order's card and falls on
+     the order date; shipment statuses follow §9.14 exactly
+   - stock and reviews are unchanged from the legacy load
+   - buyers by country match the Eurostat weights (total variation distance
+     0.003); each buyer's addresses are in one country and carry the buyer's
+     phone; every phone matches its country's mobile format, and none repeats
+   - every address's (postcode, town, region) is in `places.json`; every Dutch
+     postcode reads `1234 AB` without SS, SD or SA; Walloon streets are French,
+     Flemish and Brussels streets Dutch; every billing address is the default
+     address glued
+   - region shares follow the uniform draw over towns, far from population:
+     Galicia and Asturias hold 36.7% of Spanish addresses and Madrid 1.4%;
+     Île-de-France holds 3.5% of French addresses; Nordrhein-Westfalen 5.8%
+     and Rheinland-Pfalz 15.3% of German ones
+   - the storefront's checkout continues the sequences and writes its `PAYMENT`
+     row with the amount and, for card payments, the buyer's default card
+   - after generation: database 506 MB, data directory 1.6 GB, container memory
+     355 MiB
 6. **Storefront reconciliation and fixes.**
 7. **Load generator and Kafka.**
 8. **Release packaging,** then the `--scale` copy.
@@ -493,6 +553,19 @@ It is a business-to-business working week.
     - four fictional carriers; `RETURNS` stays empty
 15. **A twin's date is on or after its original's,** 0-4 days later with the
     measured shares (§5.4 item 2). The extract shows gap sizes, not direction.
+16. **Addresses come from GeoNames postal codes** (CC BY 4.0; decided in step
+    5): real postcode, town and region combinations for the six countries, with
+    street names from Faker in the country's language. The generator reads a
+    committed snapshot, because GeoNames updates its files daily.
+    - Towns are drawn uniformly: the files have no population figures, so small
+      places are over-represented. The dataset card says so.
+    - The Dutch file has only the four digits of each postcode, so the generator
+      adds the two letters. It never uses SS, SD or SA, which Dutch postcodes
+      avoid because of their association with the Schutzstaffel, the
+      Sicherheitsdienst and the Sturmabteilung during the 1940-45 Nazi occupation
+      of the Netherlands (source: Wikipedia). The dataset card documents both.
+    - Belgian streets follow the region: French in Wallonia, Dutch in Flanders
+      and Brussels.
 
 ---
 

@@ -1,4 +1,6 @@
 import uuid
+from decimal import Decimal, ROUND_HALF_UP
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from passlib.hash import bcrypt
 import models, schemas
@@ -68,22 +70,34 @@ def checkout_cart(db: Session, buyer_id: str, payment_method: str):
     cart = db.query(models.Cart).filter(models.Cart.buyer_id == buyer_id).first()
     if not cart or cart.total_qty == 0:
         raise ValueError("Cart is empty or does not exist")
+    # A card payment uses the buyer's default saved card
+    card_id = None
+    if payment_method == "Credit Card":
+        card_id = db.execute(
+            text("SELECT payment_id FROM customer_payment WHERE c_id = :c_id AND is_default = '1'"),
+            {"c_id": buyer_id},
+        ).scalar()
     # Create order
     order = models.Orders(
-        buyer_id=buyer_id
+        buyer_id=buyer_id,
+        payment_id=card_id,
     )
     db.add(order)
     db.flush()  # populate order_id
     # Create order items
+    amount = Decimal("0.00")
     for item in cart.items:
         prod = db.query(models.Product).get(item.p_id)
+        # Round as PostgreSQL rounds NUMERIC(10,2): half away from zero
+        price = prod.price.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         order_item = models.OrderItem(
             order_id=order.order_id,
             p_id=item.p_id,
             qty=item.qty,
-            price_at_purchase=prod.price,
+            price_at_purchase=price,
         )
         db.add(order_item)
+        amount += price * item.qty
         # Create shipment per item
         shipment = models.Shipment(
             order_id=order.order_id,
@@ -96,8 +110,9 @@ def checkout_cart(db: Session, buyer_id: str, payment_method: str):
         db.add(shipment)
     # Create payment record
     payment = models.Payment(
-        payment_id=str(uuid.uuid4()),
         order_id=order.order_id,
+        payment_id=card_id,
+        amount=amount,
         method=payment_method,
         status="completed",
     )

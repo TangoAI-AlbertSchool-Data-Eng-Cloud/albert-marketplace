@@ -57,6 +57,7 @@ class Orders(Base):
     __tablename__ = "orders"
     order_id = Column(Integer, primary_key=True, index=True)
     buyer_id = Column(String, ForeignKey("customer.c_id"))
+    payment_id = Column(Integer, nullable=True)  # the saved card, as in legacy orders
     order_date = Column(DateTime, default=datetime.utcnow)
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
     payment = relationship("Payment", uselist=False, back_populates="order")
@@ -73,12 +74,17 @@ class OrderItem(Base):
     product = relationship("Product", back_populates="order_items")
 
 class Payment(Base):
+    # One transaction per order (migration 20260915150000_payment.sql).
+    # payment_id is the saved card used (PAYMENT_DETAILS), empty for methods
+    # without a card; payment_details has no model, so no ForeignKey here.
     __tablename__ = "payment"
-    payment_id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
-    order_id = Column(Integer, ForeignKey("orders.order_id"))
-    method = Column(String, nullable=False)
-    status = Column(String, default="pending")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    transaction_id = Column(Integer, primary_key=True, index=True)
+    order_id = Column(Integer, ForeignKey("orders.order_id"), nullable=False)
+    payment_id = Column(Integer, nullable=True)
+    amount = Column(Numeric(10, 2), nullable=False)
+    method = Column(String(20), nullable=False)
+    status = Column(String(10), nullable=False, default="pending")
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     order = relationship("Orders", back_populates="payment")
 
 class Carrier(Base):

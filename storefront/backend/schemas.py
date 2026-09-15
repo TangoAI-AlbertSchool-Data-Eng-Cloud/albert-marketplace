@@ -55,6 +55,9 @@ class OrderItem(BaseModel):
         orm_mode = True
 
 class Payment(BaseModel):
+    transaction_id: int
+    payment_id: Optional[int]
+    amount: float
     method: str
     status: str
     created_at: datetime

@@ -4,7 +4,10 @@ version = "0.1.0"
 description = "Albert's Marketplace generators: calibration, order history and live traffic"
 requires-python = "==3.12.*"
 dependencies = [
+    "faker==40.18.0",
+    "numpy==2.5.3",
     "pandas==3.0.5",
+    "psycopg[binary]==3.3.5",
     "python-calamine==0.8.2",
 ]
 

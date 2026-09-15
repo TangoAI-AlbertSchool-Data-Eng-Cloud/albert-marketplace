@@ -33,9 +33,14 @@ adapted, in the order of `docs/build-spec.md` §6:
   `docker-compose.yaml` still runs PostgreSQL 13.
 - `generators/`: a uv project (Python 3.12, pinned in `uv.lock`), run in
   containers. `history/calibrate.py` writes `history/calibration.json` from
-  Online Retail II.
+  Online Retail II; `history/generate.py` generates the order history on the
+  loaded legacy data, with addresses from the GeoNames snapshot
+  `history/places.json` that `history/places.py` builds.
 - `compose.yaml` at the root: PostgreSQL 17, the `migrate` service, and
-  `load-legacy` and `calibrate` behind the `build` profile.
+  `load-legacy`, `calibrate`, `fetch-places` and `generate-history` behind the
+  `build` profile.
+  Tear those down with `docker compose --profile build down`: a plain `down`
+  leaves their containers behind.
 - `docs/critique/`: originals the course critiques, kept unchanged.
 
 **Read `docs/build-spec.md` before changing anything.** It is the plan, and it
@@ -85,6 +90,7 @@ notes are not.
   - McAuley Lab's Amazon Reviews'23: Hou et al. 2024, "Bridging Language and
     Items for Retrieval and Recommendation"
   - UCI Online Retail II: Chen 2012, CC BY 4.0, used for calibration only
+  - GeoNames postal codes (www.geonames.org): CC BY 4.0, used for addresses
 - **Product and review images are URLs only.** Never download or redistribute
   them.
 - **Never push, publish a release or deploy without Charles's go-ahead.**

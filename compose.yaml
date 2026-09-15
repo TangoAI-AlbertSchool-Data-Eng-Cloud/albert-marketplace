@@ -73,6 +73,48 @@ services:
       - ${RETAIL_XLSX_DIR:-./data/online_retail_II}:/retail:ro
       - uv_cache:/opt/uv-cache
 
+  # Build time only, to refresh generators/history/places.json from GeoNames:
+  #   docker compose --profile build run --rm fetch-places
+  fetch-places:
+    image: ghcr.io/astral-sh/uv:0.9.30-python3.12-bookworm-slim
+    profiles: ["build"]
+    working_dir: /generators
+    command: ["uv", "run", "--frozen", "python", "history/places.py"]
+    environment:
+      UV_PROJECT_ENVIRONMENT: /opt/venv
+      UV_CACHE_DIR: /opt/uv-cache
+      UV_LINK_MODE: copy
+      UV_PYTHON_DOWNLOADS: never
+    volumes:
+      - ./generators:/generators
+      - uv_cache:/opt/uv-cache
+
+  # Build time only: reloads the legacy CSVs, then generates the order history.
+  #   docker compose --profile build run --rm generate-history [--seed N] [--end-date YYYY-MM-DD]
+  # Needs LEGACY_CSV_DIR, as load-legacy does. Tear down with
+  # `docker compose --profile build down`: a plain `down` leaves the load-legacy
+  # container behind, and the next run fails on its deleted network.
+  generate-history:
+    image: ghcr.io/astral-sh/uv:0.9.30-python3.12-bookworm-slim
+    profiles: ["build"]
+    working_dir: /generators
+    entrypoint: ["uv", "run", "--frozen", "python", "history/generate.py"]
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      PGDATABASE: ${POSTGRES_DB:-marketplace}
+      UV_PROJECT_ENVIRONMENT: /opt/venv
+      UV_CACHE_DIR: /opt/uv-cache
+      UV_LINK_MODE: copy
+      UV_PYTHON_DOWNLOADS: never
+    volumes:
+      - ./generators:/generators
+      - uv_cache:/opt/uv-cache
+    depends_on:
+      load-legacy:
+        condition: service_completed_successfully
+
 volumes:
   db_data:
   uv_cache:

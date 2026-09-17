@@ -24,6 +24,7 @@ import argparse
 import datetime as dt
 import json
 import string
+import sys
 from collections import Counter
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
@@ -31,6 +32,9 @@ from pathlib import Path
 import numpy as np
 import psycopg
 from faker import Faker
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from europe import COUNTRIES, MOBILE_NUMBERS  # noqa: E402
 
 CALIBRATION = Path(__file__).with_name("calibration.json")
 PLACES = Path(__file__).with_name("places.json")
@@ -52,32 +56,10 @@ ESTIMATED_DELIVERY_DAYS = 7
 PAYMENT_METHOD = "Credit Card"
 PAYMENT_STATUS = "completed"
 
-# Country mix: name and Eurostat population on 1 January 2026 (tps00001, updated
-# 2026-07-21; build-spec §5.2, §9.3)
-COUNTRIES = {
-    "FR": ("France", 69112309),
-    "DE": ("Germany", 83467117),
-    "IT": ("Italy", 58942828),
-    "ES": ("Spain", 49590099),
-    "NL": ("Netherlands", 18130208),
-    "BE": ("Belgium", 11955308),
-}
-
 # Streets from Faker in the country's language; Belgian streets follow the
 # region, French in Wallonia and Dutch in Flanders and Brussels (§9.16)
 STREET_LOCALES = {"FR": "fr_FR", "DE": "de_DE", "IT": "it_IT", "ES": "es_ES", "NL": "nl_NL", "BE": "nl_BE"}
 WALLONIA = "Wallonie"
-
-# Mobile numbers in national format, digits only, from simplified mobile
-# prefixes: (prefix, total digits) (§5.2, §9.7, §9.10)
-MOBILE_NUMBERS = {
-    "FR": [("06", 10), ("07", 10)],
-    "DE": [("015", 12), ("016", 11), ("016", 12), ("017", 11), ("017", 12)],
-    "IT": [("3", 10)],
-    "ES": [("6", 9), ("7", 9)],
-    "NL": [("06", 10)],
-    "BE": [("04", 10)],
-}
 
 # Dutch postcodes: GeoNames' four digits plus two letters, never SS, SD or SA (§9.16)
 DUTCH_POSTCODE_LETTERS = [

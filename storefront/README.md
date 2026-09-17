@@ -38,10 +38,16 @@ In the UI, enter a buyer ID from the `buyer` table, for example from
 | `POST /checkout/{buyer_id}?payment_method=` | Places the order: order lines, one shipment per line, one payment; the stock trigger decrements stock |
 | `GET /orders/{buyer_id}` | The buyer's orders, with lines, payment and shipments |
 | `GET /shipments/{order_id}` | An order's shipments |
+| `POST /warehouse/advance` | Simulation only: moves shipments along by order age, restocks products below 5 units |
 
 `payment_method` is `Credit Card` (the buyer's default saved card), `PayPal` or
 `Bank Transfer`. Errors come back as 400, 404, 409 or 422 with a `detail`
 message.
+
+With `SIMULATION=true`, the default in `compose.yaml`, the load generator sends
+an `X-Simulated-Time` header (ISO 8601) so that an order, its payment and its
+shipments carry its simulated time, and it calls `POST /warehouse/advance`.
+Requests without the header, such as the UI's, use the real time.
 
 ## Dependencies
 

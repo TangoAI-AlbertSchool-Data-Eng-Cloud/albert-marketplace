@@ -3,9 +3,11 @@
 The schema belongs to db/migrations: this app maps onto it and never creates tables.
 """
 
-from typing import List
+import os
+from datetime import datetime, timezone
+from typing import Dict, List, Optional
 
-from fastapi import Depends, FastAPI, Query, Request
+from fastapi import Depends, FastAPI, Header, Query, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -16,6 +18,10 @@ from database import SessionLocal
 
 app = FastAPI(title="Albert's Marketplace storefront API")
 
+# SIMULATION lets the load generator date orders with its simulated clock
+# (X-Simulated-Time) and move the warehouse along (docs/build-spec.md §5.5, §9.17)
+SIMULATION = os.environ.get("SIMULATION", "").lower() in ("1", "true", "yes")
+
 
 def get_db():
     db = SessionLocal()
@@ -23,6 +29,21 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def request_time(x_simulated_time: Optional[str] = Header(default=None)) -> datetime:
+    """The real time, or the load generator's simulated time when SIMULATION is enabled."""
+    if x_simulated_time is None:
+        return crud.utcnow()
+    if not SIMULATION:
+        raise crud.StorefrontError("X-Simulated-Time is accepted only when SIMULATION is enabled")
+    try:
+        moment = datetime.fromisoformat(x_simulated_time)
+    except ValueError:
+        raise crud.StorefrontError("X-Simulated-Time must be an ISO 8601 date and time")
+    if moment.tzinfo is not None:
+        moment = moment.astimezone(timezone.utc).replace(tzinfo=None)
+    return moment
 
 
 @app.exception_handler(crud.StorefrontError)
@@ -67,8 +88,13 @@ def remove_cart_item(buyer_id: str, p_id: str, db: Session = Depends(get_db)):
 
 
 @app.post("/checkout/{buyer_id}", response_model=schemas.Orders, status_code=201)
-def checkout(buyer_id: str, payment_method: schemas.PaymentMethod, db: Session = Depends(get_db)):
-    return crud.checkout_cart(db, buyer_id, payment_method)
+def checkout(
+    buyer_id: str,
+    payment_method: schemas.PaymentMethod,
+    now: datetime = Depends(request_time),
+    db: Session = Depends(get_db),
+):
+    return crud.checkout_cart(db, buyer_id, payment_method, now)
 
 
 @app.get("/orders/{buyer_id}", response_model=List[schemas.Orders])
@@ -79,3 +105,10 @@ def get_orders(buyer_id: str, db: Session = Depends(get_db)):
 @app.get("/shipments/{order_id}", response_model=List[schemas.Shipment])
 def get_shipments(order_id: int, db: Session = Depends(get_db)):
     return crud.list_shipments(db, order_id)
+
+
+@app.post("/warehouse/advance", response_model=Dict[str, int], summary="Simulation only: move shipments along, restock")
+def advance_warehouse(now: datetime = Depends(request_time), db: Session = Depends(get_db)):
+    if not SIMULATION:
+        raise crud.NotFound("Not found")
+    return crud.advance_warehouse(db, now.date())

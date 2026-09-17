@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
 
 import bcrypt
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session
 
@@ -140,7 +140,8 @@ def remove_from_cart(db: Session, buyer_id: str, p_id: str):
 # Checkout and orders
 
 
-def checkout_cart(db: Session, buyer_id: str, payment_method: str):
+def checkout_cart(db: Session, buyer_id: str, payment_method: str, now: datetime):
+    """Places the order at `now`: the real time, or the load generator's simulated time."""
     cart = get_or_create_cart(db, buyer_id)
     if not cart.items:
         raise StorefrontError("Cart is empty")
@@ -156,7 +157,7 @@ def checkout_cart(db: Session, buyer_id: str, payment_method: str):
         if card_id is None:
             raise StorefrontError("No saved card: choose another payment method")
 
-    today = utcnow().date()
+    today = now.date()
     order = models.Orders(buyer_id=buyer_id, payment_id=card_id, order_date=today)
     db.add(order)
     try:
@@ -184,7 +185,7 @@ def checkout_cart(db: Session, buyer_id: str, payment_method: str):
         )
         amount += price * item.qty
     order.payment = models.Payment(
-        payment_id=card_id, amount=amount, method=payment_method, status="completed", created_at=utcnow()
+        payment_id=card_id, amount=amount, method=payment_method, status="completed", created_at=now
     )
 
     cart.items.clear()
@@ -208,3 +209,45 @@ def list_shipments(db: Session, order_id: int):
     if order is None:
         raise NotFound("Unknown order")
     return order.shipments
+
+
+# Warehouse, for the simulation (docs/build-spec.md §5.5)
+
+RESTOCK_BELOW = 5
+RESTOCK_UNITS = (20, 100)
+
+
+def advance_warehouse(db: Session, today):
+    """Moves shipments along by order age, with the history's rules (§9.14), and restocks products running out."""
+    delivered = db.execute(
+        text(
+            """
+            UPDATE shipment s
+            SET status = 'delivered', actual_delivery_date = o.order_date + 2 + floor(random() * 8)::int
+            FROM orders o
+            WHERE o.order_id = s.order_id
+              AND s.status IN ('processing', 'in_transit')
+              AND :today - o.order_date > 10
+            """
+        ),
+        {"today": today},
+    ).rowcount
+    in_transit = db.execute(
+        text(
+            """
+            UPDATE shipment s
+            SET status = 'in_transit'
+            FROM orders o
+            WHERE o.order_id = s.order_id
+              AND s.status = 'processing'
+              AND :today - o.order_date >= 3
+            """
+        ),
+        {"today": today},
+    ).rowcount
+    restocked = db.execute(
+        text("UPDATE product SET qty = qty + :low + floor(random() * (:high - :low + 1))::int WHERE qty < :below"),
+        {"low": RESTOCK_UNITS[0], "high": RESTOCK_UNITS[1], "below": RESTOCK_BELOW},
+    ).rowcount
+    db.commit()
+    return {"delivered": delivered, "in_transit": in_transit, "restocked": restocked}

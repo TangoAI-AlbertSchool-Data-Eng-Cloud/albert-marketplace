@@ -302,7 +302,27 @@ It is a business-to-business working week.
   field.
 - **Parameters:** clock acceleration, orders per simulated day, seed. Weekly
   seasonality from the same index.
-- **Kafka** runs as a single broker in KRaft mode, in `compose.yaml`.
+- **Warehouse** (added in step 7): every simulated hour, the load generator calls
+  the storefront's `POST /warehouse/advance`, enabled only with `SIMULATION`.
+  - It moves shipments along with the age rules of §9.14: `in_transit` from 3
+    days, `delivered` after 10 days, with a delivery 2-9 days after the order.
+  - It restocks products below 5 units by 20 to 100 units.
+  - Without it, live orders would stay `processing` forever, and popular
+    products would sell out during the course.
+- **Payment methods:** buyers with a saved card pay by card; new sign-ups have
+  no card and pay with PayPal.
+- **Kafka** runs as a single broker in KRaft mode, in `compose.yaml`
+  (`apache/kafka:4.3.1`, the JVM image: the native image uses about 100 MiB
+  less but is experimental and has no command-line tools). Measured on
+  2026-09-15:
+  - `kafka-init` creates the `clickstream` topic with 3 partitions
+  - clients reach the broker at `kafka:9092` inside the compose project,
+    `localhost:9092` from the host, and `host.docker.internal:29092` from other
+    Docker setups such as Airbyte or Airflow; all three were tested
+  - with the heap capped at 256 MB: 282 MiB idle, 365 MiB after 200,000
+    messages, 145,000 messages per second
+  - topic data survives a restart and a stop and start (`kafka_data` volume);
+    retention is a week or 256 MB per partition
 
 ### 5.6 Storefront fixes (running code, not teaching data)
 
@@ -605,6 +625,20 @@ It is a business-to-business working week.
       of the Netherlands (source: Wikipedia). The dataset card documents both.
     - Belgian streets follow the region: French in Wallonia, Dutch in Flanders
       and Brussels.
+17. **Live traffic runs one simulated clock for orders and events** (decided in
+    step 7).
+    - The clock starts at the latest payment in the database, so it continues
+      the history and resumes after a restart. It runs 15 times faster than
+      real time (`CLOCK_ACCELERATION`), so a four-week course covers about 14
+      months.
+    - The load generator sends its simulated time in an `X-Simulated-Time`
+      header. The storefront dates orders, payments and shipments with it only
+      when `SIMULATION` is enabled, so orders placed in the UI keep the real
+      time. Events carry `event_time` (simulated) and `emitted_at` (real).
+    - Volumes: 200 orders per simulated day on average (the history's
+      average), shaped by the week-of-year index. A third of sessions buy, 2%
+      start with a sign-up, each session views 1 to 5 products, and a quarter
+      of the sessions that do not buy leave items in their cart.
 
 ---
 

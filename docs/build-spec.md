@@ -382,6 +382,18 @@ It is a business-to-business working week.
   - sets every identity sequence to its table's highest loaded id
   - loads `orders` with `trg_update_inventory` disabled
 
+### 5.9 Change data capture (decided after step 7)
+
+- PostgreSQL runs with `wal_level=logical`, so the students' Airbyte or
+  Debezium can read changes from a replication slot (§8). Each group runs its
+  own copy, so each has its own slot.
+- `max_slot_wal_keep_size=512MB` keeps a forgotten slot from filling a laptop's
+  disk: PostgreSQL drops the slot rather than keeping the log for ever.
+- *Verified 2026-09-18:* `wal_level` is `logical` with 10 replication slots and
+  10 WAL senders; a `test_decoding` slot decoded an insert, an update and a
+  delete on `carrier`; a `pgoutput` slot and a publication for all tables, as
+  Airbyte creates them, were made and dropped cleanly.
+
 ---
 
 ## 6. Suggested work order

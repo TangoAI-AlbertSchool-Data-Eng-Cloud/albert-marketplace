@@ -38,7 +38,8 @@ adapted, in the order of `docs/build-spec.md` §6:
   postcodes and Eurostat regional populations), which `history/places.py`
   builds. `live/traffic.py` is the load generator, with its own image
   (`generators/Dockerfile`, live dependency group only).
-- `compose.yaml` at the root: PostgreSQL 17, the `migrate` service, the
+- `compose.yaml` at the root: PostgreSQL 17 (`wal_level=logical`, for the
+  students' change data capture), the `migrate` service, the
   storefront (`storefront-api` on port 8100, `storefront-ui` on 8510), Kafka
   (`kafka` on host port 9092, topic `clickstream`), the `load-generator`, and
   `load-legacy`, `calibrate`, `fetch-places` and `generate-history` behind the

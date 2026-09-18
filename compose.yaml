@@ -6,6 +6,10 @@ name: albert-marketplace
 services:
   db:
     image: postgres:17.11
+    # Logical decoding, so the students' change data capture (Airbyte, Debezium)
+    # can read changes from a replication slot. max_slot_wal_keep_size stops a
+    # forgotten slot from filling a laptop's disk: PostgreSQL drops the slot instead.
+    command: ["postgres", "-c", "wal_level=logical", "-c", "max_slot_wal_keep_size=512MB"]
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}

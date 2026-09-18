@@ -502,6 +502,31 @@ It is a business-to-business working week.
    - the original Dockerfile is `docs/critique/Dockerfile.original`; the
      `.DS_Store` files and `storefront/docker-compose.yaml` are gone
 7. **Load generator and Kafka.**
+   *Done 2026-09-18 (`generators/live/traffic.py`, services `kafka`,
+   `kafka-init` and `load-generator`). Verified on a run at 720x with 50 orders
+   per simulated day, 5.5 real minutes covering 2.75 simulated days:*
+   - 505 sessions produced 2,199 events (1,553 `product_viewed`, 467
+     `added_to_cart`, 179 `order_placed`), all valid JSON, keyed by buyer, with
+     unique ids and exactly the fields of their type
+   - every live order has one `order_placed` event and every event its order,
+     with the same buyer, amount, method and lines, and the payment time equal
+     to `event_time` to the microsecond; every order line has its shipment
+   - the clock measured 720.1x, started after the history's last payment, and
+     after a restart resumed at the latest payment, so no order goes backwards
+   - volumes fit the calibration: 179 orders against 168 expected, 35.4% of
+     sessions bought, sign-ups were 1.6% and paid by PayPal only, and every
+     session viewed 1 to 5 products
+   - the warehouse endpoint kept the age rules of §9.14 for history and live
+     shipments, and restocked every product under 5 units (1,697 to 0)
+   - with `SIMULATION` off, `X-Simulated-Time` is refused (400), the warehouse
+     endpoint is absent (404) and checkout uses the real date; with it on, a
+     malformed header is refused and an order, its payment and its shipments
+     take the simulated time
+   - the step 6 API tests still pass; the API answered 2,151 200s, 187 201s and
+     5 deliberate 409s, with no traceback
+   - footprint under traffic: database 665 MiB, Kafka 379 MiB, API 55 MiB, UI
+     53 MiB, load generator 63 MiB. Images: load generator 317 MB, API 265 MB,
+     UI 776 MB
 8. **Release packaging,** then the `--scale` copy.
 
 ---

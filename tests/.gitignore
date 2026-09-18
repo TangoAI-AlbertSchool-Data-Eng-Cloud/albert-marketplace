@@ -1,0 +1,8 @@
+# What the runs leave behind
+*.log
+*.txt
+*.json
+crlf/
+empty_csv/
+geonames/
+legacy_*.sql

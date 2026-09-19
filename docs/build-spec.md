@@ -598,6 +598,28 @@ It is a business-to-business working week.
      an empty database
    - `tests/step8_verify.ps1` runs all of this in its own compose project
 
+   *`--scale` done 2026-09-19 (§9.18). Verified with seed 7 and end date
+   2026-09-15:*
+   - no `--scale` and `--scale 1` give identical fingerprints, and the five
+     history tables still carry the released dataset's md5s: the flag costs the
+     published data nothing
+   - `--scale 0.1` gives 22,264 orders (a tenth of 222,644), 40,488 lines and
+     €3,901,130 of revenue, a tenth of €39,199,900; `--scale 2` gives 445,288
+     orders, 818,672 lines and €78,300,544
+   - at both scales every order has its payment, lines and shipments; every
+     line set appears an even number of times per buyer, so the duplicate
+     defect holds; every order keeps a real buyer and card; the dates still
+     cover the three years; and the sequence sits at the highest order id
+   - the catalogue and the people come out byte-identical to the full run at
+     both scales (`product`, `review`, `customer`, `shipping_details`,
+     `payment_details`, `buyer`), with stock unchanged at 2,160,443 units
+   - two runs at the same scale give an identical database; order ids stay
+     contiguous from 1 at scale 2; the storefront is healthy on a scaled
+     database and continues from order 445,289
+   - `--scale 0` is refused
+   - generation takes 33 s at 0.1, 43 s at 1 and 59 s at 2
+   - `tests/step8_scale_verify.ps1` runs all of this
+
 ---
 
 ## 7. Verification
@@ -733,6 +755,20 @@ It is a business-to-business working week.
       average), shaped by the week-of-year index. A third of sessions buy, 2%
       start with a sign-up, each session views 1 to 5 products, and a quarter
       of the sessions that do not buy leave items in their cart.
+
+18. **`--scale` means order density** (decided 2026-09-19, in step 8). It
+    multiplies how many orders the three years hold, and nothing else:
+    customers, addresses, cards, the catalogue and the reviews stay exactly as
+    they are, so the review anchor and every defect survive at any scale.
+    - A pair is a review's order and its duplicate. Below 1.0 whole pairs are
+      dropped; above 1.0 extra pairs are added on reviews drawn at random,
+      reusing that review's buyer and saved card.
+    - `--scale 1.0` draws nothing new, so it reproduces the released dataset
+      byte for byte.
+    - The other readings were rejected: a longer history stretches the
+      review-to-order mapping, and scaling the people would need synthetic
+      customers beyond the extract's, which breaks the link to real review
+      authors.
 
 ---
 

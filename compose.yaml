@@ -255,7 +255,9 @@ services:
       - uv_cache:/opt/uv-cache
 
   # Build time only: reloads the legacy CSVs, then generates the order history.
-  #   docker compose --profile build run --rm generate-history [--seed N] [--end-date YYYY-MM-DD]
+  #   docker compose --profile build run --rm generate-history [--seed N] [--end-date YYYY-MM-DD] [--scale F]
+  # --scale changes how many orders the three years hold (0.1 for a tenth,
+  # 5 for five times as many); customers and the catalogue do not move.
   # Needs LEGACY_CSV_DIR, as load-legacy does. Tear down with
   # `docker compose --profile build down`: a plain `down` leaves the load-legacy
   # container behind, and the next run fails on its deleted network.
@@ -283,7 +285,9 @@ services:
   # Build time only, to package the release assets from the seeded database:
   #   docker compose --profile build run --rm release
   # Writes into RELEASE_DIR (default ./data/release); DATASET_VERSION,
-  # DATASET_SEED and DATASET_END_DATE go into MANIFEST.json.
+  # DATASET_SEED, DATASET_END_DATE and DATASET_SCALE go into MANIFEST.json.
+  # A scaled copy is its own release: build it with the matching RELEASE_DIR,
+  # DATASET_VERSION and DATASET_SCALE.
   release:
     image: postgres:17.11
     profiles: ["build"]
@@ -296,6 +300,7 @@ services:
       DATASET_VERSION: ${DATASET_VERSION:-v1.0.0}
       DATASET_SEED: ${DATASET_SEED:-7}
       DATASET_END_DATE: ${DATASET_END_DATE:-2026-09-15}
+      DATASET_SCALE: ${DATASET_SCALE:-1.0}
     volumes:
       - ./db/release:/release:ro
       - ./docs/dataset-card.md:/card/dataset-card.md:ro

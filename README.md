@@ -112,9 +112,15 @@ docker compose --profile build run --rm generate-history --seed 7 --end-date 202
 docker compose --profile build run --rm release            # -> data/release/
 ```
 
-The history generator is deterministic: the same seed and end date give the same
-database every time. Tear these down with `docker compose --profile build down`;
-a plain `down` leaves their containers behind.
+`--scale` changes how many orders those three years hold, without touching the
+customers or the catalogue: `--scale 0.1` for a tenth of them (a small copy for
+a laptop or for CI), `--scale 5` for five times as many. Every rule the full
+dataset follows still holds, duplicates included.
+
+The history generator is deterministic: the same seed, end date and scale give
+the same database every time. Tear these down with
+`docker compose --profile build down`; a plain `down` leaves their containers
+behind.
 
 ## Licence and attribution
 

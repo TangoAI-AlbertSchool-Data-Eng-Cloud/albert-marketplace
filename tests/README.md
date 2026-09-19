@@ -26,6 +26,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests\step7a_verify.ps1
 | `step7a_verify.ps1` | Live traffic at 720x, then every Kafka event against the database |
 | `step7b_verify.ps1` | The clock resuming after a restart, `SIMULATION` on and off, the step 6 API tests again |
 | `step8_verify.ps1` | The release: its checksums, a cold start that seeds itself from it, the CSV export and its defects, and the stack starting without a dump |
+| `step8_scale_verify.ps1` | `--scale`: 1.0 reproducing the released dataset byte for byte, and a scaled copy keeping every rule and defect |
 
 `step1_loadtest.sql`, `step2_checks.sql`, `step3_checks.sql`, `step3_fingerprint.sql`
 and `step5_checks.sql` are the psql scripts those runners copy into the database

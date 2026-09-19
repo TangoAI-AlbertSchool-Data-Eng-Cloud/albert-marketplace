@@ -18,7 +18,7 @@ listed below on purpose: **do not treat this data as clean.**
 | Every person in it | synthetic |
 
 `MANIFEST.json` in the release records the exact version, build time, seed, end
-date and row counts of the copy you downloaded.
+date, scale and row counts of the copy you downloaded.
 
 ## Files
 
@@ -27,7 +27,7 @@ date and row counts of the copy you downloaded.
 | `marketplace.dump` | The whole database, `pg_dump --format=custom`. Restore it with `pg_restore`, or let `docker compose up` do it. |
 | `legacy_csv.tar.gz` | One CSV per table. The 25 tables of the original extract keep the unnamed index column pandas wrote (`Unnamed: 0`); `order_items` and `payment`, which came later, do not. |
 | `calibration.json` | The seasonality index and basket distributions the order history was drawn from, measured on Online Retail II. |
-| `MANIFEST.json` | Version, build time, seed, end date, row counts, date range. |
+| `MANIFEST.json` | Version, build time, seed, end date, scale, row counts, date range. |
 | `CHECKSUMS` | sha256 of each file above. |
 
 The CSVs are byte-identical between builds of the same dataset version.
@@ -208,6 +208,11 @@ docker compose --profile build run --rm release
 
 The first command reloads the extract and regenerates the history; the second
 writes these files into `data/release/`.
+
+`generate.py` also takes `--scale`, which changes how many orders the three
+years hold without touching the customers or the catalogue: `--scale 0.1` for a
+tenth of them, `--scale 5` for five times as many. A scaled copy keeps every
+assumption and every defect listed here, including the duplicate orders.
 
 ## Citing it
 

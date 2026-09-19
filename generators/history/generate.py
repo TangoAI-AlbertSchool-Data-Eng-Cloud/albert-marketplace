@@ -9,15 +9,17 @@ Runs after db/load_legacy.sql, in one transaction (docs/build-spec.md §5.2, §5
   its original's lines
 - writes one PAYMENT per order and one SHIPMENT per order line, with four
   fictional carriers
+- --scale changes how many orders those three years hold, without touching the
+  customers or the catalogue: 0.1 for a tenth of them, 5 for five times as many
 - moves every customer to one of six European countries: a national mobile
   number, addresses spread like each country's regional population from
   places.json (GeoNames postcodes, Eurostat populations) with streets from
   Faker, and billing addresses rebuilt from the default address
 
-    docker compose --profile build run --rm generate-history [--seed N] [--end-date YYYY-MM-DD]
+    docker compose --profile build run --rm generate-history [--seed N] [--end-date YYYY-MM-DD] [--scale F]
 
-Deterministic: the same legacy load, calibration, places, seed and end date give
-the same database.
+Deterministic: the same legacy load, calibration, places, seed, end date and
+scale give the same database.
 """
 
 import argparse
@@ -81,7 +83,16 @@ def parse_args():
     parser.add_argument(
         "--trend", type=float, default=1.0, help="yearly growth factor of order volume (default 1.0: flat)"
     )
-    return parser.parse_args()
+    parser.add_argument(
+        "--scale",
+        type=float,
+        default=1.0,
+        help="orders per day, as a multiple of the extract's (default 1.0: the extract itself)",
+    )
+    args = parser.parse_args()
+    if args.scale <= 0:
+        parser.error("--scale must be greater than 0")
+    return args
 
 
 def years_before(day, years):
@@ -140,6 +151,39 @@ def read_legacy(cur):
     return reviews, orders, reviewed, products, customers, addresses, cards
 
 
+def plan_pairs(rng, orders, n, scale):
+    """Review index and order rows for every original/twin pair, at the asked scale.
+
+    A pair is one review's order and its duplicate. At scale 1.0 the pairs are
+    the extract's own, in the extract's order, so nothing about the output
+    moves. Below 1, whole pairs are dropped; above 1, extra pairs are added on
+    reviews drawn at random, so the duplicate defect and the review anchor hold
+    at every scale. Customers, cards and the catalogue are untouched either way.
+
+    Returns the review index of each pair, the order rows (every original, then
+    every twin, as build_rows reads them), the rows to insert and the ids to
+    delete.
+    """
+    if scale == 1.0:
+        return list(range(n)), orders, [], []
+
+    pairs = max(1, round(n * scale))
+    if pairs <= n:
+        kept = sorted(int(k) for k in rng.choice(n, size=pairs, replace=False))
+        rows = [orders[k] for k in kept] + [orders[n + k] for k in kept]
+        keep_ids = {order_id for order_id, _, _ in rows}
+        dropped = [order_id for order_id, _, _ in orders if order_id not in keep_ids]
+        return kept, rows, [], dropped
+
+    # Extra pairs reuse a review's buyer and saved card, as its own orders do
+    extra = [int(r) for r in rng.integers(0, n, size=pairs - n)]
+    first = max(order_id for order_id, _, _ in orders) + 1
+    new_originals = [(first + i, orders[r][1], orders[r][2]) for i, r in enumerate(extra)]
+    new_twins = [(first + len(extra) + i, orders[r][1], orders[r][2]) for i, r in enumerate(extra)]
+    rows = orders[:n] + new_originals + orders[n:] + new_twins
+    return list(range(n)) + extra, rows, new_originals + new_twins, []
+
+
 def draw_order_dates(rng, n, end, trend, index):
     start = years_before(end, 3)
     days = [start + dt.timedelta(days=d) for d in range((end - start).days)]
@@ -156,7 +200,7 @@ def draw_order_dates(rng, n, end, trend, index):
     return start, originals, twins
 
 
-def draw_lines(rng, reviews, reviewed, products, basket):
+def draw_lines(rng, review_ids, reviewed, products, basket):
     # Line prices as NUMERIC(10,2) stores them, rounded half away from zero
     price = {p_id: value.quantize(CENT, rounding=ROUND_HALF_UP) for p_id, value, _ in products}
     # Extra lines: products with reviews, never one whose price rounds to 0.00 (§9.4)
@@ -166,9 +210,9 @@ def draw_lines(rng, reviews, reviewed, products, basket):
     cumulative /= cumulative[-1]
 
     size_values, size_p = distribution(basket["products_per_order"])
-    sizes = rng.choice(size_values, size=len(reviews), p=size_p)
+    sizes = rng.choice(size_values, size=len(review_ids), p=size_p)
     chosen_per_order = []
-    for (review_id, _), size in zip(reviews, sizes):
+    for review_id, size in zip(review_ids, sizes):
         chosen = [reviewed[review_id]]
         while len(chosen) < size:
             candidate = extra_ids[int(np.searchsorted(cumulative, rng.random(), side="right"))]
@@ -281,7 +325,24 @@ def copy_rows(cur, statement, rows):
             copy.write_row(row)
 
 
-def write_history(cur, order_dates, items, payments, shipments):
+def write_history(cur, order_dates, items, payments, shipments, new_orders, dropped):
+    if dropped:
+        cur.execute("DELETE FROM orders WHERE order_id = ANY(%s)", (dropped,))
+    if new_orders:
+        day = dict(order_dates)
+        # The trigger reads the buyer's cart, which is empty at this point, but
+        # db/load_legacy.sql disables it for the same insert, so this does too:
+        # generating the history never moves stock.
+        cur.execute("ALTER TABLE orders DISABLE TRIGGER trg_update_inventory")
+        copy_rows(
+            cur,
+            "COPY orders (order_id, buyer_id, payment_id, order_date) FROM STDIN",
+            [(order_id, buyer_id, card_id, day[order_id]) for order_id, buyer_id, card_id in new_orders],
+        )
+        cur.execute("ALTER TABLE orders ENABLE TRIGGER trg_update_inventory")
+    if dropped or new_orders:
+        cur.execute("SELECT setval(pg_get_serial_sequence('orders', 'order_id'), (SELECT max(order_id) FROM orders))")
+
     cur.execute("CREATE TEMP TABLE new_order_dates (order_id integer PRIMARY KEY, order_date date) ON COMMIT DROP")
     copy_rows(cur, "COPY new_order_dates (order_id, order_date) FROM STDIN", order_dates)
     cur.execute("UPDATE orders o SET order_date = n.order_date FROM new_order_dates n WHERE o.order_id = n.order_id")
@@ -340,27 +401,36 @@ def main():
     calibration = json.loads(CALIBRATION.read_text(encoding="utf-8"))
     places = json.loads(PLACES.read_text(encoding="utf-8"))
     # Independent streams, so a change to one step leaves the others' draws alone
-    dates_rng, lines_rng, rows_rng, places_rng = (
-        np.random.default_rng(s) for s in np.random.SeedSequence(args.seed).spawn(4)
+    dates_rng, lines_rng, rows_rng, places_rng, scale_rng = (
+        np.random.default_rng(s) for s in np.random.SeedSequence(args.seed).spawn(5)
     )
 
     # Connection settings come from the libpq environment (PGHOST, PGUSER, ...)
     with psycopg.connect() as conn, conn.cursor() as cur:
         reviews, orders, reviewed, products, customers, addresses, cards = read_legacy(cur)
         n = len(reviews)
+        pair_reviews, order_rows, new_orders, dropped = plan_pairs(scale_rng, orders, n, args.scale)
+        pairs = len(pair_reviews)
         start, originals, twins = draw_order_dates(
-            dates_rng, n, args.end_date, args.trend, calibration["week_of_year"]["index"]
+            dates_rng, pairs, args.end_date, args.trend, calibration["week_of_year"]["index"]
         )
-        lines = draw_lines(lines_rng, reviews, reviewed, products, calibration["basket"])
-        order_dates, items, payments, shipments = build_rows(rows_rng, orders, n, originals, twins, lines, args.end_date)
-        write_history(cur, order_dates, items, payments, shipments)
+        lines = draw_lines(
+            lines_rng, [reviews[r][0] for r in pair_reviews], reviewed, products, calibration["basket"]
+        )
+        order_dates, items, payments, shipments = build_rows(
+            rows_rng, order_rows, pairs, originals, twins, lines, args.end_date
+        )
+        write_history(cur, order_dates, items, payments, shipments, new_orders, dropped)
         phones, new_addresses, billing, per_country = localise(places_rng, customers, addresses, cards, places)
         write_places(cur, phones, new_addresses, billing)
 
     last = args.end_date - dt.timedelta(days=1)
-    print(f"seed {args.seed}, end date {args.end_date}, trend {args.trend}: orders dated {start} to {last}")
     print(
-        f"orders {len(orders)}, order lines {len(items)}, payments {len(payments)}, shipments {len(shipments)}, "
+        f"seed {args.seed}, end date {args.end_date}, trend {args.trend}, scale {args.scale}: "
+        f"orders dated {start} to {last}"
+    )
+    print(
+        f"orders {len(order_rows)}, order lines {len(items)}, payments {len(payments)}, shipments {len(shipments)}, "
         f"carriers {len(CARRIERS)}"
     )
     print("shipment status:", dict(sorted(Counter(row[4] for row in shipments).items())))

@@ -20,6 +20,7 @@ CSV_DIR="$OUT/legacy_csv"
 VERSION=${DATASET_VERSION:-dev}
 SEED=${DATASET_SEED:-}
 END_DATE=${DATASET_END_DATE:-}
+SCALE=${DATASET_SCALE:-1.0}
 
 # In the order db/load_legacy.sql loads them. The 25 legacy tables keep the
 # index column the original extract was exported with; ORDER_ITEMS and PAYMENT
@@ -95,6 +96,7 @@ q "SELECT jsonb_pretty(jsonb_build_object(
        'built_at', to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"'),
        'seed', nullif('$SEED', ''),
        'end_date', nullif('$END_DATE', ''),
+       'scale', '$SCALE'::numeric,
        'postgres_version', current_setting('server_version'),
        'first_order_date', (SELECT min(order_date)::text FROM orders),
        'last_order_date', (SELECT max(order_date)::text FROM orders),

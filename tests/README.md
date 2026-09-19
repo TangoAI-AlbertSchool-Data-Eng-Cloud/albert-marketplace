@@ -25,6 +25,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests\step7a_verify.ps1
 | `step7_kafka_verify.ps1` | The broker: topic, all three listeners, memory under load, data surviving restarts |
 | `step7a_verify.ps1` | Live traffic at 720x, then every Kafka event against the database |
 | `step7b_verify.ps1` | The clock resuming after a restart, `SIMULATION` on and off, the step 6 API tests again |
+| `step8_verify.ps1` | The release: its checksums, a cold start that seeds itself from it, the CSV export and its defects, and the stack starting without a dump |
 
 `step1_loadtest.sql`, `step2_checks.sql`, `step3_checks.sql`, `step3_fingerprint.sql`
 and `step5_checks.sql` are the psql scripts those runners copy into the database
@@ -37,6 +38,8 @@ determinism checks compare.
 - `LEGACY_CSV_DIR` pointing at the folder with the 25 legacy CSVs, for anything
   that loads or generates data. Each runner falls back to the path on Charles's
   machine.
+- `data/release/` built, for `step8_verify.ps1`:
+  `docker compose --profile build run --rm release`.
 - Python on the host, for the checks the runners call. They only use the
   standard library, except `step7_host_client.py`, which uses `kafka-python`
   through `uv run --with`.

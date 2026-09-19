@@ -26,6 +26,59 @@ services:
       timeout: 3s
       retries: 30
 
+  # The dataset ships as a GitHub release asset, not in git. On a first start
+  # these two fetch it and restore it, before the migrations run; afterwards
+  # they find the schema already there and do nothing. To start on an empty
+  # database instead, run with SEED_URL= (empty).
+  seed-fetch:
+    image: curlimages/curl:8.19.0
+    user: root
+    environment:
+      SEED_URL: ${SEED_URL-https://github.com/Charlestng/albert-marketplace/releases/download/${DATASET_VERSION:-v1.0.0}/marketplace.dump}
+    volumes:
+      - seed_data:/seed
+      - ${RELEASE_DIR:-./data/release}:/local:ro
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        if [ -f /local/marketplace.dump ]; then
+          echo "Using the dump built here: $${RELEASE_DIR:-./data/release}/marketplace.dump"
+        elif [ -f /seed/marketplace.dump ]; then
+          echo "The dataset is already downloaded."
+        elif [ -z "$$SEED_URL" ]; then
+          echo "SEED_URL is empty: starting on an empty database."
+        else
+          echo "Downloading the dataset from $$SEED_URL"
+          if curl --fail --location --retry 3 --progress-bar --output /seed/marketplace.dump.part "$$SEED_URL"; then
+            mv /seed/marketplace.dump.part /seed/marketplace.dump
+          else
+            rm -f /seed/marketplace.dump.part
+            echo "WARNING: the download failed. The database will start EMPTY, with"
+            echo "the schema the migrations create and no data. Once the network is"
+            echo "back, run: docker compose up --force-recreate seed-fetch seed"
+          fi
+        fi
+
+  seed:
+    image: postgres:17.11
+    entrypoint: ["bash", "/seed.sh"]
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      PGDATABASE: ${POSTGRES_DB:-marketplace}
+      # sha256 from the release's CHECKSUMS; checked when set
+      SEED_SHA256: ${SEED_SHA256:-}
+    volumes:
+      - ./db/release/seed.sh:/seed.sh:ro
+      - seed_data:/seed
+      - ${RELEASE_DIR:-./data/release}:/local:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      seed-fetch:
+        condition: service_completed_successfully
+
   migrate:
     image: ghcr.io/amacneil/dbmate:2.35.1
     command: ["--wait", "up"]
@@ -38,6 +91,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      seed:
+        condition: service_completed_successfully
 
   # Storefront API: http://localhost:8100/docs (API_PORT changes the host port)
   storefront-api:
@@ -225,7 +280,33 @@ services:
       load-legacy:
         condition: service_completed_successfully
 
+  # Build time only, to package the release assets from the seeded database:
+  #   docker compose --profile build run --rm release
+  # Writes into RELEASE_DIR (default ./data/release); DATASET_VERSION,
+  # DATASET_SEED and DATASET_END_DATE go into MANIFEST.json.
+  release:
+    image: postgres:17.11
+    profiles: ["build"]
+    entrypoint: ["bash", "/release/build.sh"]
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      PGDATABASE: ${POSTGRES_DB:-marketplace}
+      DATASET_VERSION: ${DATASET_VERSION:-v1.0.0}
+      DATASET_SEED: ${DATASET_SEED:-7}
+      DATASET_END_DATE: ${DATASET_END_DATE:-2026-09-15}
+    volumes:
+      - ./db/release:/release:ro
+      - ./docs/dataset-card.md:/card/dataset-card.md:ro
+      - ./generators/history/calibration.json:/calibration/calibration.json:ro
+      - ${RELEASE_DIR:-./data/release}:/out
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   db_data:
   kafka_data:
+  seed_data:
   uv_cache:

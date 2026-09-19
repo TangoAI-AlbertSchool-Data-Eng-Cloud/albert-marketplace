@@ -39,14 +39,23 @@ adapted, in the order of `docs/build-spec.md` §6:
   builds. `live/traffic.py` is the load generator, with its own image
   (`generators/Dockerfile`, live dependency group only).
 - `compose.yaml` at the root: PostgreSQL 17 (`wal_level=logical`, for the
-  students' change data capture), the `migrate` service, the
+  students' change data capture), `seed-fetch` and `seed`, which download the
+  released dump and restore it into an empty database before the `migrate`
+  service runs, the
   storefront (`storefront-api` on port 8100, `storefront-ui` on 8510), Kafka
   (`kafka` on host port 9092, topic `clickstream`), the `load-generator`, and
-  `load-legacy`, `calibrate`, `fetch-places` and `generate-history` behind the
-  `build` profile.
+  `load-legacy`, `calibrate`, `fetch-places`, `generate-history` and `release`
+  behind the `build` profile.
   Tear those down with `docker compose --profile build down`: a plain `down`
   leaves their containers behind.
 - `docs/critique/`: originals the course critiques, kept unchanged.
+- `db/release/`: `build.sh` packages the release assets from the seeded
+  database into `data/release/` (dump, CSV export, calibration, dataset card,
+  manifest, checksums); `seed.sh` restores one. `docs/dataset-card.md` ships
+  with them. The root `README.md` is what students read first, and `LICENSE`
+  is MIT plus the CC BY-SA 4.0 note for the data.
+- `tests/`: the checks behind every verified claim in the build spec, one
+  runner per step, each in its own compose project (`tests/README.md`).
 
 **Read `docs/build-spec.md` before changing anything.** It is the plan, and it
 holds every measurement taken so far (data profile, schema mismatches,

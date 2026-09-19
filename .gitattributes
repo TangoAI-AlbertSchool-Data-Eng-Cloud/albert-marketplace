@@ -2,3 +2,9 @@
 # checksum taken on Windows matches the one written in a container.
 uv.lock                 text eol=lf
 generators/**/*.json    text eol=lf
+
+# Shell scripts are mounted into Linux containers: CRLF would break the shebang.
+*.sh                    text eol=lf
+
+# compose.yaml carries a shell script inline, for the same reason.
+compose.yaml            text eol=lf

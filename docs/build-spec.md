@@ -354,7 +354,34 @@ It is a business-to-business working week.
   - every generator assumption
   - the seed and end date the dataset was generated with
 - **Size:** GitHub allows each release asset up to 2 GiB. Check the dump against
-  that before choosing compression.
+  that before choosing compression. *Measured in step 8: the dump is 66 MB and
+  the CSV export 72 MB, so plain `pg_dump --compress=9` and one `tar.gz` are
+  enough.*
+
+**Built in step 8:**
+
+- `db/release/build.sh`, run by the `release` service behind the `build`
+  profile, packages the assets from the seeded database into `RELEASE_DIR`
+  (default `./data/release`): `marketplace.dump`
+  (`pg_dump --format=custom --compress=9`), `legacy_csv.tar.gz`,
+  `calibration.json`, `DATASET_CARD.md`, `MANIFEST.json` and `CHECKSUMS`.
+- The CSV export orders every table by its primary key, so it is byte-identical
+  between builds, and writes the 25 legacy tables with the unnamed index column
+  the original extract had. `ORDER_ITEMS` and `PAYMENT` have none: they never
+  came from pandas.
+- `MANIFEST.json` records the version, build time, seed, end date, row counts,
+  date range, revenue and total stock, so a stack can check what it restored.
+- `db/release/seed.sh`, run by the `seed` service with `seed-fetch` in front of
+  it, downloads the dump on a first `docker compose up` and restores it before
+  `migrate` runs. It does nothing when the schema is already there, prefers a
+  dump built locally in `RELEASE_DIR`, checks `SEED_SHA256` when it is set, and
+  when the download fails says so loudly and leaves the database empty rather
+  than failing the stack.
+- The custom format restores the data before it creates the triggers, so
+  `trg_update_inventory` does not fire on the restored orders.
+- The dataset card is `docs/dataset-card.md`, and ships with the assets.
+- The root `README.md` and `LICENSE` (MIT, plus the CC BY-SA 4.0 note for the
+  data) were written in the same step.
 
 ### 5.8 Migrations and loader (decided after step 1)
 
@@ -540,6 +567,36 @@ It is a business-to-business working week.
      53 MiB, load generator 63 MiB. Images: load generator 317 MB, API 265 MB,
      UI 776 MB
 8. **Release packaging,** then the `--scale` copy.
+   *Packaging done 2026-09-18 (`db/release/`, services `release`, `seed-fetch`
+   and `seed`; §5.7). Verified on the v1.0.0 build, seed 7, end date
+   2026-09-15:*
+   - the assets are 66 MB (`marketplace.dump`), 72 MB (`legacy_csv.tar.gz`),
+     15 KB (`calibration.json`), plus the card, the manifest and `CHECKSUMS`:
+     the largest is 3.5% of GitHub's 2 GiB limit
+   - `sha256sum --check CHECKSUMS` passes; a second build gives a byte-identical
+     `legacy_csv.tar.gz`, while `marketplace.dump` and `MANIFEST.json` differ
+     only in the time they record
+   - a cold start on an empty volume downloads nothing it already has, restores
+     222,644 orders and reaches a healthy API in 17 s; all 27 tables match
+     `MANIFEST.json` row for row, revenue is €39,199,900.62 and the orders run
+     2023-09-15 to 2026-09-14
+   - the restore leaves stock at 2,160,443 units and `trg_update_inventory`
+     enabled: the custom format loads the data before it creates the trigger,
+     so the trigger never fires on restored orders
+   - dbmate finds its four migrations applied and does nothing; the next order
+     id is 222,645
+   - the storefront serves products and order history from the restored data
+   - a restart restores nothing ("already has the schema") and the row counts do
+     not move
+   - the CSV export keeps the defects: the 25 legacy files start with the
+     unnamed index column (0 to 130,765 in `customer.csv`) and `order_items`
+     does not; 82,203 phones keep their leading zero, matching the database
+     exactly, all 9 to 12 characters of text; 130,766 passwords in plain text;
+     9,401 CVVs of fewer than three digits
+   - with no dump and `SEED_URL` empty, the stack still starts: the migrations
+     create the schema (27 tables plus dbmate's own) and the API is healthy on
+     an empty database
+   - `tests/step8_verify.ps1` runs all of this in its own compose project
 
 ---
 

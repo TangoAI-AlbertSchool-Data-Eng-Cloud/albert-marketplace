@@ -21,7 +21,7 @@ You need Docker Desktop (or Docker Engine with Compose v2), about 6 GB of free
 disk and 3 GB of free RAM.
 
 ```
-git clone https://github.com/Charlestng/albert-marketplace.git
+git clone https://github.com/TangoAI-AlbertSchool-Data-Eng-Cloud/albert-marketplace.git
 cd albert-marketplace
 docker compose up
 ```

@@ -14,7 +14,7 @@ listed below on purpose: **do not treat this data as clean.**
 | Version | v1.0.0 |
 | Database | PostgreSQL 17 |
 | Licence | data CC BY-SA 4.0, code MIT |
-| Source repository | https://github.com/Charlestng/albert-marketplace |
+| Source repository | https://github.com/TangoAI-AlbertSchool-Data-Eng-Cloud/albert-marketplace |
 | Every person in it | synthetic |
 
 `MANIFEST.json` in the release records the exact version, build time, seed, end

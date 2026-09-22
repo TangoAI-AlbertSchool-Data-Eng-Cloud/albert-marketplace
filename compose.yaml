@@ -34,7 +34,7 @@ services:
     image: curlimages/curl:8.19.0
     user: root
     environment:
-      SEED_URL: ${SEED_URL-https://github.com/Charlestng/albert-marketplace/releases/download/${DATASET_VERSION:-v1.0.0}/marketplace.dump}
+      SEED_URL: ${SEED_URL-https://github.com/TangoAI-AlbertSchool-Data-Eng-Cloud/albert-marketplace/releases/download/${DATASET_VERSION:-v1.0.0}/marketplace.dump}
     volumes:
       - seed_data:/seed
       - ${RELEASE_DIR:-./data/release}:/local:ro

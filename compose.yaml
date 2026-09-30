@@ -282,6 +282,28 @@ services:
       load-legacy:
         condition: service_completed_successfully
 
+  # Build time only: support tickets for the LLM course, written from the
+  # released dataset. `plan` is deterministic; `write` calls the Anthropic API
+  # once per uncached ticket and needs ANTHROPIC_API_KEY in the environment.
+  #   docker compose --profile build run --rm tickets plan
+  #   docker compose --profile build run --rm tickets write
+  tickets:
+    image: ghcr.io/astral-sh/uv:0.9.30-python3.12-bookworm-slim
+    profiles: ["build"]
+    working_dir: /generators
+    entrypoint: ["uv", "run", "--frozen", "--group", "tickets", "python", "tickets/tickets.py"]
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      PYTHONIOENCODING: utf-8
+      UV_PROJECT_ENVIRONMENT: /opt/venv
+      UV_CACHE_DIR: /opt/uv-cache
+      UV_LINK_MODE: copy
+      UV_PYTHON_DOWNLOADS: never
+    volumes:
+      - ./generators:/generators
+      - ./data:/data
+      - uv_cache:/opt/uv-cache
+
   # Build time only, to package the release assets from the seeded database:
   #   docker compose --profile build run --rm release
   # Writes into RELEASE_DIR (default ./data/release); DATASET_VERSION,

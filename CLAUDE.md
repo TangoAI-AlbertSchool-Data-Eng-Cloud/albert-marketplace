@@ -38,6 +38,12 @@ adapted, in the order of `docs/build-spec.md` §6:
   postcodes and Eurostat regional populations), which `history/places.py`
   builds. `live/traffic.py` is the load generator, with its own image
   (`generators/Dockerfile`, live dependency group only).
+  `tickets/tickets.py` writes support tickets for the LLM course from the
+  released dataset (`tickets` compose service, `tickets` dependency group):
+  `plan` is deterministic; `write` calls the Anthropic API and is reproducible
+  only through its response cache in `data/tickets/cache/`, which ships with
+  the tickets. The labels come from the plan, never from the model, and are
+  checked by hand before release.
 - `compose.yaml` at the root: PostgreSQL 17 (`wal_level=logical`, for the
   students' change data capture), `seed-fetch` and `seed`, which download the
   released dump and restore it into an empty database before the `migrate`

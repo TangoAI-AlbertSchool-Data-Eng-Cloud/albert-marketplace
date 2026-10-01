@@ -122,6 +122,16 @@ the same database every time. Tear these down with
 `docker compose --profile build down`; a plain `down` leaves their containers
 behind.
 
+## Support tickets
+
+120 messages to the company's support inbox, each labelled with the team that
+should handle it, for the LLM course. They are a separate release,
+[`tickets-v1.0.0`](https://github.com/TangoAI-AlbertSchool-Data-Eng-Cloud/albert-marketplace/releases/tag/tickets-v1.0.0):
+download `tickets_v1.csv`. A language model wrote the wording from real rows of
+the dataset; a person checked every label. How they were made, and how to
+rebuild the first sixty without calling the model:
+[docs/tickets-card.md](docs/tickets-card.md).
+
 ## Licence and attribution
 
 - **Code: MIT** ([LICENSE](LICENSE)).

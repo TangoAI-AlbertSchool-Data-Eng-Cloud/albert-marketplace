@@ -43,7 +43,10 @@ adapted, in the order of `docs/build-spec.md` §6:
   `plan` is deterministic; `write` calls the Anthropic API and is reproducible
   only through its response cache in `data/tickets/cache/`, which ships with
   the tickets. The labels come from the plan, never from the model, and are
-  checked by hand before release.
+  checked by hand before release. Its `outliers` batch reads staff-only briefs
+  from `OUTLIER_BRIEFS_DIR`: they encode a course exercise's answer, so they
+  never enter this repo, and neither do the plan files or `source_id` columns
+  (the released file carries student columns only).
 - `compose.yaml` at the root: PostgreSQL 17 (`wal_level=logical`, for the
   students' change data capture), `seed-fetch` and `seed`, which download the
   released dump and restore it into an empty database before the `migrate`

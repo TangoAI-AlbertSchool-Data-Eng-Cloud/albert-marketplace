@@ -287,6 +287,8 @@ services:
   # once per uncached ticket and needs ANTHROPIC_API_KEY in the environment.
   #   docker compose --profile build run --rm tickets plan
   #   docker compose --profile build run --rm tickets write
+  # The `outliers` batch (--batch outliers) also needs its briefs, which are
+  # staff-only and not in this repository: set OUTLIER_BRIEFS_DIR to their folder.
   tickets:
     image: ghcr.io/astral-sh/uv:0.9.30-python3.12-bookworm-slim
     profiles: ["build"]
@@ -302,6 +304,7 @@ services:
     volumes:
       - ./generators:/generators
       - ./data:/data
+      - ${OUTLIER_BRIEFS_DIR:-./data/briefs}:/briefs:ro
       - uv_cache:/opt/uv-cache
 
   # Build time only, to package the release assets from the seeded database:

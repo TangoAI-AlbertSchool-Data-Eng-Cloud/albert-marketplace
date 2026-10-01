@@ -126,6 +126,45 @@ SCHEMA = {
 
 LANG_NAME = {"en": "English", "fr": "French", "de": "German"}
 
+# Batch "outliers": messages that land in the support inbox but fit no label
+# cleanly. Ten briefs from Charles (2026-10-01), six tickets each, every one
+# attached to a real order. The briefs are NOT in this public repository: which
+# ticket is spam or abuse follows from them, and that is a course exercise's
+# answer. Staff pass their folder as OUTLIER_BRIEFS_DIR (see compose.yaml).
+BRIEFS = Path(os.environ.get("OUTLIER_BRIEFS", "/briefs/outlier_briefs.json"))
+
+
+def load_outliers():
+    """(kind, proposed label, second label, brief, six angles) per brief."""
+    if not BRIEFS.exists():
+        sys.exit(f"no outlier briefs at {BRIEFS}: they are staff-only, set OUTLIER_BRIEFS_DIR")
+    data = json.loads(BRIEFS.read_text(encoding="utf-8"))
+    return [(b["kind"], b["label"], b["second"], b["brief"], b["angles"]) for b in data["briefs"]]
+
+
+OUTLIER_START = 61  # ticket ids continue after batch 1
+
+SYSTEM_OUTLIERS = """You write messages for a teaching dataset of a support inbox.
+
+The company is Albert's Marketplace, a fictional European online marketplace for \
+beauty products: third-party sellers list the products, and the marketplace runs \
+payments and delivery. Each message is one message that arrived in its support \
+inbox. Some come from customers, some do not: the brief says who wrote it.
+
+Rules:
+- Write only as the author the brief describes, in the language you are given.
+- Use only the facts you are given: order number, dates, amounts, product. Never \
+invent another number, date or amount.
+- Never name a category, department or team.
+- Never name a real company, brand or website other than the products in the facts. \
+Invented websites end in .example.
+- Hostile messages stay free of slurs, threats, and remarks about anyone's origin, \
+religion, gender, sexuality or disability.
+- Sign with the first name given, or not at all, unless the brief says otherwise.
+
+Return a subject line and a body."""
+SYSTEMS = {"customer": SYSTEM, "outliers": SYSTEM_OUTLIERS}
+
 
 # ------------------------------------------------------------------ release
 
@@ -293,13 +332,54 @@ def plan(rel):
     return out
 
 
+def used_orders(tickets):
+    """Every order a batch already speaks about, twins included."""
+    used = set()
+    for t in tickets:
+        if t["facts"].get("order_id"):
+            used.add(int(t["facts"]["order_id"]))
+        kind, ref = t["source_id"].split(":", 1)
+        if kind in ("orders", "shipment", "order"):  # review: and subscription: ids are not orders
+            used.update(int(x) for x in re.findall(r"\d+", ref))
+    return used
+
+
+def plan_outliers(rel, taken):
+    """Six tickets per outlier brief, each on a real order no other batch uses."""
+    rng = random.Random(f"{SEED}:outliers")  # its own stream: batch 1 stays byte-identical
+    n = len(rel["reviews"])
+    pool = [i for i in range(1, n + 1) if i not in taken and rel["shipments"].get(i)]
+    outliers = load_outliers()
+    orders = rng.sample(pool, 6 * len(outliers))
+    tickets = []
+    for (kind, label, second, brief, angles), chunk in zip(outliers, zip(*[iter(orders)] * 6)):
+        for angle, o in zip(angles, chunk):
+            facts = order_facts(rel, o)
+            tickets.append({"label": label, "ambiguous_with": second, "source": "outlier",
+                            "source_id": f"outlier:{kind}/order:{o}", "system": "outliers",
+                            "received_at": received(rng, facts["order_date"], rel["end"]),
+                            "facts": facts, "situation": f"{brief}\nMake this one different: {angle}."})
+    for lang, count in LANG_SHARE.items():
+        eligible = [t for t in tickets if "language" not in t
+                    and LANG_OF_COUNTRY.get(t["facts"].get("country")) == lang]
+        for t in rng.sample(eligible, min(count, len(eligible))):
+            t["language"] = lang
+    rng.shuffle(tickets)
+    out = []
+    for k, t in enumerate(tickets, OUTLIER_START):
+        t.setdefault("language", "en")
+        out.append({"ticket_id": f"T{k:03d}", **t})
+    return out
+
+
 # -------------------------------------------------------------------- write
 
 def prompt(t):
     f = t["facts"]
+    outlier = t.get("system") == "outliers"
     lines = [f"Language: {LANG_NAME[t['language']]}", f"Date the email is sent: {t['received_at']}"]
     if f.get("first_name"):
-        lines.append(f"Customer's first name: {f['first_name']}")
+        lines.append(f"{'Account holder' if outlier else 'Customer'}'s first name: {f['first_name']}")
     if f.get("country"):
         lines.append(f"Customer lives in: {f['country']}")
     for key, label in [("order_id", "Order number"), ("order_date", "Order date"),
@@ -318,7 +398,7 @@ def prompt(t):
                   "you can. Drop what only makes sense in a public review: star ratings, advice to "
                   "other buyers.", "", f"Review title: {t['review']['title']}", f"Review: {t['review']['text']}"]
     else:
-        lines += ["", f"What happened: {t['situation']}"]
+        lines += ["", f"{'Brief' if outlier else 'What happened'}: {t['situation']}"]
     return "\n".join(lines)
 
 
@@ -327,12 +407,13 @@ def cache_key(request):
 
 
 def call(client, request):
-    """One ticket. Returns (subject, body, usage dict, served-by model)."""
+    """One ticket. Returns (subject, body, usage dict, served-by model), or None if declined."""
     response = client.beta.messages.create(
         betas=["server-side-fallback-2026-07-01"], fallbacks="default", **request)
     if response.stop_reason == "refusal":
         category = response.stop_details.category if response.stop_details else None
-        raise SystemExit(f"refused ({category}): {request['messages'][0]['content'][:80]}")
+        print(f"  declined ({category}), skipped; nothing cached", flush=True)
+        return None
     if response.stop_reason == "max_tokens":
         raise SystemExit("hit max_tokens: raise it in the request")
     text = next(b.text for b in response.content if b.type == "text")
@@ -341,13 +422,13 @@ def call(client, request):
     return data["subject"].strip(), data["body"].strip(), usage, response.model
 
 
-def write(tickets):
+def write(tickets, draft):
     cache = OUT / "cache"
     cache.mkdir(parents=True, exist_ok=True)
     client = None
-    rows, spent, fresh = [], {"input_tokens": 0, "output_tokens": 0}, 0
+    rows, spent, fresh, declined = [], {"input_tokens": 0, "output_tokens": 0}, 0, []
     for t in tickets:
-        request = {"model": MODEL, "max_tokens": 4000, "system": SYSTEM,
+        request = {"model": MODEL, "max_tokens": 4000, "system": SYSTEMS[t.get("system", "customer")],
                    "output_config": {"effort": EFFORT, "format": {"type": "json_schema", "schema": SCHEMA}},
                    "messages": [{"role": "user", "content": prompt(t)}]}
         key = cache_key(request)
@@ -358,7 +439,11 @@ def write(tickets):
             if client is None:
                 import anthropic  # container only: its compiled dependencies are blocked on the Windows host
                 client = anthropic.Anthropic()
-            subject, body, usage, served = call(client, request)
+            result = call(client, request)
+            if result is None:
+                declined.append(t["ticket_id"])
+                continue
+            subject, body, usage, served = result
             hit = {"subject": subject, "body": body, "usage": usage, "served_by": served}
             path.write_text(json.dumps(hit, ensure_ascii=False, indent=1), encoding="utf-8")
             for k in spent:
@@ -372,7 +457,6 @@ def write(tickets):
             "gold_label": t["label"], "ambiguous_with": t["ambiguous_with"], "checked": "", "note": "",
             "source": t["source"], "source_id": t["source_id"], "model": hit["served_by"], "cache_key": key,
         })
-    draft = OUT / "tickets_draft.csv"
     with draft.open("w", encoding="utf-8", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=list(rows[0]))
         w.writeheader()
@@ -381,6 +465,8 @@ def write(tickets):
     print(f"{len(rows)} tickets -> {draft} ({fresh} new calls, {len(rows) - fresh} from cache)")
     print(f"new calls: {spent['input_tokens']} input + {spent['output_tokens']} output tokens, "
           f"about ${cost:.4f} at ${PRICE_IN}/${PRICE_OUT} per MTok")
+    if declined:
+        print(f"declined, not in the draft: {', '.join(declined)}")
     print("sha256", sha256(draft))
 
 
@@ -391,13 +477,22 @@ def sha256(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("step", choices=["plan", "write"])
+    parser.add_argument("--batch", choices=["main", "outliers"], default="main")
     parser.add_argument("--limit", type=int, help="write: only the first N tickets (to try a change cheaply)")
     args = parser.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
-    plan_path = OUT / "plan.jsonl"
+    suffix = "" if args.batch == "main" else f"_{args.batch}"
+    plan_path = OUT / f"plan{suffix}.jsonl"
     if args.step == "plan":
         rel = load_release()
-        tickets = plan(rel)
+        if args.batch == "main":
+            tickets = plan(rel)
+        else:
+            main_plan = OUT / "plan.jsonl"
+            if not main_plan.exists():
+                sys.exit("plan the main batch first: the outliers avoid its orders")
+            taken = used_orders([json.loads(x) for x in main_plan.read_text(encoding="utf-8").splitlines()])
+            tickets = plan_outliers(rel, taken)
         with plan_path.open("w", encoding="utf-8", newline="\n") as fh:
             for t in tickets:
                 fh.write(json.dumps(t, ensure_ascii=False, sort_keys=True) + "\n")
@@ -412,7 +507,7 @@ def main():
         if not plan_path.exists():
             sys.exit(f"no plan at {plan_path}: run the plan step first")
         tickets = [json.loads(line) for line in plan_path.read_text(encoding="utf-8").splitlines()]
-        write(tickets[:args.limit] if args.limit else tickets)
+        write(tickets[:args.limit] if args.limit else tickets, OUT / f"tickets{suffix}_draft.csv")
 
 
 if __name__ == "__main__":

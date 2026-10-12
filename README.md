@@ -132,6 +132,16 @@ the dataset; a person checked every label. How they were made, and how to
 rebuild the first sixty without calling the model:
 [docs/tickets-card.md](docs/tickets-card.md).
 
+## Policy corpus
+
+The company's help centre, seller policy, four product pages and a catalogue
+extract of 150 products, as six PDFs, for the LLM course's retrieval work. A
+separate release,
+[`policy-corpus-v1.0.0`](https://github.com/TangoAI-AlbertSchool-Data-Eng-Cloud/albert-marketplace/releases/tag/policy-corpus-v1.0.0).
+The policies are fictional and agree with the dataset where the two meet; how
+they were made and how to rebuild them:
+[docs/policy-corpus-card.md](docs/policy-corpus-card.md).
+
 ## Licence and attribution
 
 - **Code: MIT** ([LICENSE](LICENSE)).
